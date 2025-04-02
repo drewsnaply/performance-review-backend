@@ -18,28 +18,16 @@ const { authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS Configuration
+// Updated CORS Configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:5000',
-    ];
-
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  
+  origin: [
+    'http://localhost:3000',
+    'https://performance-review-frontend.onrender.com'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type', 
-    'Authorization', 
-    'Access-Control-Allow-Methods', 
-    'Access-Control-Allow-Origin', 
-    'Access-Control-Allow-Headers'
+    'Authorization'
   ],
   credentials: true,
   optionsSuccessStatus: 200
