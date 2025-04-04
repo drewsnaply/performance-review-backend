@@ -19,9 +19,12 @@ const { authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Extremely Permissive CORS Configuration
+// Comprehensive CORS Configuration
 const corsOptions = {
-  origin: '*', // Allow all origins
+  origin: [
+    'http://localhost:3000',
+    'https://performance-review-frontend.onrender.com'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type', 
@@ -40,21 +43,15 @@ app.use(cors(corsOptions));
 // Handle OPTIONS preflight requests
 app.options('*', cors(corsOptions));
 
-// Additional headers middleware
+// Detailed logging middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  console.log('FULL REQUEST DETAILS:', {
-    timestamp: new Date().toISOString(),
+  console.log('Incoming Request:', {
     method: req.method,
     path: req.path,
+    origin: req.get('origin'),
     headers: req.headers,
-    body: req.body,
-    origin: req.get('origin')
+    body: req.body
   });
-  
   next();
 });
 
@@ -82,10 +79,9 @@ const connectDB = async () => {
   }
 };
 
-// Routes with additional logging
+// Routes
 app.use('/api/auth', (req, res, next) => {
   console.log('AUTH ROUTE - Request Details:', {
-    timestamp: new Date().toISOString(),
     body: req.body,
     headers: req.headers,
     origin: req.get('origin')
@@ -101,22 +97,6 @@ app.get('/', (req, res) => {
   res.status(200).send('Performance Review System Backend');
 });
 
-// Additional error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', {
-    message: err.message,
-    stack: err.stack,
-    timestamp: new Date().toISOString()
-  });
-  
-  res.status(err.status || 500).json({
-    error: {
-      message: err.message || 'An unexpected error occurred',
-      timestamp: new Date().toISOString()
-    }
-  });
-});
-
 // Global error handler
 app.use(globalErrorHandler);
 
@@ -125,7 +105,6 @@ const startServer = async () => {
   await connectDB();
   app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
-    console.log(`Server started on port ${PORT}`);
   });
 };
 
