@@ -23,16 +23,21 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     'http://localhost:3000',
-    'https://performance-review-frontend.onrender.com',
+    'https://performance-review-frontend.onrender.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   credentials: true,
-  optionsSuccessStatus: 200,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
-// Middleware
+// Apply CORS early in the middleware chain
 app.use(cors(corsOptions));
+
+// Handle OPTIONS preflight requests explicitly
+app.options('*', cors(corsOptions));
 
 // JSON parsing middleware (IMPORTANT: ensure it is applied before routes)
 app.use(express.json());
