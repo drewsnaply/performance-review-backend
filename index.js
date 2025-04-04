@@ -19,21 +19,9 @@ const { authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enhanced CORS Configuration
+// Extremely Permissive CORS Configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000', 
-      'https://performance-review-frontend.onrender.com'
-    ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: '*', // Allow all origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type', 
@@ -43,33 +31,37 @@ const corsOptions = {
     'Accept'
   ],
   credentials: true,
-  optionsSuccessStatus: 204,
-  preflightContinue: false
+  optionsSuccessStatus: 200
 };
 
-// Apply CORS middleware early
+// Apply CORS middleware
 app.use(cors(corsOptions));
 
 // Handle OPTIONS preflight requests
 app.options('*', cors(corsOptions));
 
-// JSON parsing middleware
-app.use(express.json());
-
-// Comprehensive logging middleware
+// Additional headers middleware
 app.use((req, res, next) => {
-  console.log('Incoming Request:', {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  console.log('FULL REQUEST DETAILS:', {
     timestamp: new Date().toISOString(),
     method: req.method,
     path: req.path,
-    origin: req.get('origin'),
     headers: req.headers,
-    body: req.body
+    body: req.body,
+    origin: req.get('origin')
   });
+  
   next();
 });
 
-// Morgan logging
+// JSON parsing middleware
+app.use(express.json());
+
+// Logging middleware
 app.use(morgan('combined', {
   stream: {
     write: (message) => logger.info(message.trim()),
