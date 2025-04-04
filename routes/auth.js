@@ -8,12 +8,12 @@ const router = express.Router();
 // Generate JWT Token
 const generateToken = (user) => {
   return jwt.sign(
-    { 
-      id: user._id, 
-      username: user.username, 
-      role: user.role 
-    }, 
-    process.env.JWT_SECRET, 
+    {
+      id: user._id,
+      username: user.username,
+      role: user.role,
+    },
+    process.env.JWT_SECRET,
     { expiresIn: '1d' }
   );
 };
@@ -25,7 +25,9 @@ router.post('/register', catchAsync(async (req, res, next) => {
   // Check if user already exists
   let existingUser = await User.findOne({ $or: [{ email }, { username }] });
   if (existingUser) {
-    return next(new AppError('User with this email or username already exists', 400));
+    return next(
+      new AppError('User with this email or username already exists', 400)
+    );
   }
 
   // Create new user
@@ -33,7 +35,7 @@ router.post('/register', catchAsync(async (req, res, next) => {
     username,
     email,
     password,
-    role: role || 'employee'
+    role: role || 'employee',
   });
 
   const savedUser = await newUser.save();
@@ -47,13 +49,19 @@ router.post('/register', catchAsync(async (req, res, next) => {
 
   res.status(201).json({
     token,
-    user: userResponse
+    user: userResponse,
   });
 }));
 
 // Login user
 router.post('/login', catchAsync(async (req, res, next) => {
+  console.log('Incoming Request Body:', req.body); // Debugging log for req.body
+
   const { username, password } = req.body;
+
+  if (!username || !password) {
+    return next(new AppError('Please provide both username and password', 400));
+  }
 
   // Find user and include password for comparison
   const user = await User.findOne({ username }).select('+password');
@@ -71,13 +79,20 @@ router.post('/login', catchAsync(async (req, res, next) => {
   // Generate token
   const token = generateToken(user);
 
+  if (!token) {
+    console.error('Token generation failed'); // Debugging log for token issues
+    return next(new AppError('Failed to generate token', 500));
+  }
+
+  console.log('Generated Token:', token); // Debugging log for token
+
   // Prepare response (exclude password)
   const userResponse = user.toObject();
   delete userResponse.password;
 
   res.json({
-    token,
-    user: userResponse
+    token, // Add the token to the response
+    user: userResponse,
   });
 }));
 
@@ -85,7 +100,10 @@ router.post('/login', catchAsync(async (req, res, next) => {
 const protect = catchAsync(async (req, res, next) => {
   // Check if token exists
   let token;
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
     token = req.headers.authorization.split(' ')[1];
   }
 
@@ -116,7 +134,9 @@ router.get('/me', protect, catchAsync(async (req, res, next) => {
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return next(new AppError('You do not have permission to perform this action', 403));
+      return next(
+        new AppError('You do not have permission to perform this action', 403)
+      );
     }
     next();
   };
@@ -125,5 +145,5 @@ const authorize = (...roles) => {
 module.exports = {
   authRoutes: router,
   protect,
-  authorize
+  authorize,
 };
