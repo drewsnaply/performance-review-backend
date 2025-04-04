@@ -19,24 +19,20 @@ const { authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Updated CORS Configuration
+// Updated CORS Configuration - Simplified
 const corsOptions = {
   origin: [
     'http://localhost:3000',
     'https://performance-review-frontend.onrender.com'
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   credentials: true,
-  preflightContinue: false,
   optionsSuccessStatus: 204
 };
 
-// Apply CORS early in the middleware chain
+// Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Handle OPTIONS preflight requests explicitly
+// Handle OPTIONS preflight requests
 app.options('*', cors(corsOptions));
 
 // JSON parsing middleware (IMPORTANT: ensure it is applied before routes)
