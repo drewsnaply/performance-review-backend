@@ -20,7 +20,32 @@ const { router: authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Improved CORS Configuration to fix localhost issues
+// ======== CORS FIX ========
+// Place this before any other middleware
+app.use((req, res, next) => {
+  // Get the origin from the request headers
+  const origin = req.headers.origin;
+  
+  // Allow localhost and your deployed frontend
+  if (origin === 'http://localhost:3000' || 
+      origin === 'https://performance-review-frontend.onrender.com') {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  // Set necessary CORS headers
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
+// Original CORS middleware as a fallback
 const corsOptions = {
   origin: function(origin, callback) {
     // List of allowed origins - add localhost explicitly
@@ -51,7 +76,7 @@ const corsOptions = {
   maxAge: 86400 // Enable CORS pre-flight cache for 24 hours
 };
 
-// Apply CORS middleware first to ensure it runs before other middleware
+// Apply CORS middleware
 app.use(cors(corsOptions));
 
 // Debug middleware to log CORS issues

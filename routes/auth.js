@@ -83,13 +83,20 @@ router.post('/register', catchAsync(async (req, res, next) => {
     username: userResponse.username
   });
 
+  // Set explicit CORS headers for the response
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
   res.status(201).json({
     token,
     user: userResponse,
   });
 }));
 
-// Login user with enhanced debugging
+// Login user with enhanced CORS handling
 router.post('/login', catchAsync(async (req, res, next) => {
   console.log('LOGIN REQUEST:', {
     body: { username: req.body.username }, // Avoid logging password
@@ -143,9 +150,13 @@ router.post('/login', catchAsync(async (req, res, next) => {
   });
 
   // Set explicit CORS headers for the response
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
 
+  // Set response
   res.status(200).json({
     token,
     user: userResponse,
