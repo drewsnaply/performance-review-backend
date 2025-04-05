@@ -114,6 +114,16 @@ const protect = catchAsync(async (req, res, next) => {
   next();
 });
 
+// Role-based authorization middleware
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return next(new AppError('You do not have permission to perform this action', 403));
+    }
+    next();
+  };
+};
+
 // Get current user profile
 router.get('/me', protect, catchAsync(async (req, res, next) => {
   const user = await User.findById(req.user.id);
@@ -124,4 +134,5 @@ router.get('/me', protect, catchAsync(async (req, res, next) => {
 module.exports = {
   router,
   protect,
+  authorize, // Ensure authorize is correctly exported
 };
