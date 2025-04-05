@@ -89,11 +89,16 @@ router.post('/register', catchAsync(async (req, res, next) => {
   });
 }));
 
-// Login user
+// Login user with enhanced debugging
 router.post('/login', catchAsync(async (req, res, next) => {
   console.log('LOGIN REQUEST:', {
     body: { username: req.body.username }, // Avoid logging password
-    headers: req.headers,
+    headers: {
+      origin: req.headers.origin,
+      host: req.headers.host,
+      referer: req.headers.referer,
+      contentType: req.headers['content-type']
+    },
     timestamp: new Date().toISOString()
   });
 
@@ -137,10 +142,13 @@ router.post('/login', catchAsync(async (req, res, next) => {
     username: userResponse.username
   });
 
+  // Set explicit CORS headers for the response
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+
   res.status(200).json({
     token,
     user: userResponse,
-    message: 'Login successful'
   });
 }));
 

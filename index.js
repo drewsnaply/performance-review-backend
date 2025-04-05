@@ -14,22 +14,30 @@ const {
   logger,
 } = require('./errorHandler');
 
-// FIXED: Changed to use the new export method from auth.js
+// Import routes with destructuring
 const { router: authRoutes } = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Comprehensive CORS Configuration
+// Improved CORS Configuration to fix localhost issues
 const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'https://performance-review-frontend.onrender.com',
-    'https://performance-review-frontend.onrender.com/', // Include with trailing slash
-    'https://performance-review-backend.onrender.com',
-    'https://performance-review-backend.onrender.com/' // Include with trailing slash
-  ],
+  origin: function(origin, callback) {
+    // List of allowed origins - add localhost explicitly
+    const allowedOrigins = [
+      'https://performance-review-frontend.onrender.com',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000'
+    ];
+
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error(`CORS Not Allowed for origin: ${origin}`), false);
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type', 
@@ -40,32 +48,20 @@ const corsOptions = {
   ],
   credentials: true,
   optionsSuccessStatus: 200,
-  preflightContinue: false
+  maxAge: 86400 // Enable CORS pre-flight cache for 24 hours
 };
 
-// Apply CORS middleware
+// Apply CORS middleware first to ensure it runs before other middleware
 app.use(cors(corsOptions));
 
-// Add explicit options handling for CORS preflight requests
-app.options('*', cors(corsOptions));
-
-// Detailed logging middleware
+// Debug middleware to log CORS issues
 app.use((req, res, next) => {
   console.log('Incoming Request:', {
     method: req.method,
     path: req.path,
     origin: req.get('origin'),
-    timestamp: new Date().toISOString(),
-    headers: req.headers,
-    body: req.body
+    timestamp: new Date().toISOString()
   });
-  
-  // Manual CORS headers for additional flexibility
-  res.header('Access-Control-Allow-Origin', req.get('origin') || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
   next();
 });
 
@@ -86,12 +82,9 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log('MongoDB Connection:', {
-      status: 'Connected',
-      timestamp: new Date().toISOString()
-    });
+    console.log('MongoDB Connection Successful', new Date().toISOString());
   } catch (error) {
-    console.error('MongoDB Connection Error:', {
+    console.error('MongoDB Connection Failed:', {
       message: error.message,
       timestamp: new Date().toISOString()
     });
@@ -99,16 +92,11 @@ const connectDB = async () => {
   }
 };
 
-// Routes with logging
-app.use('/api/auth', (req, res, next) => {
-  console.log('AUTH Route Request:', {
-    body: req.body,
-    headers: req.headers,
-    timestamp: new Date().toISOString()
-  });
-  next();
-}, authRoutes);
+// Options response for preflight requests
+app.options('*', cors(corsOptions));
 
+// Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/departments', require('./routes/departments'));
 app.use('/api/employees', require('./routes/employees'));
 
@@ -122,14 +110,23 @@ app.use(globalErrorHandler);
 
 // Start server
 const startServer = async () => {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Server Running:`, {
-      port: PORT,
-      environment: process.env.NODE_ENV,
-      timestamp: new Date().toISOString()
+  try {
+    await connectDB();
+    const server = app.listen(PORT, () => {
+      console.log(`Server Running:`, {
+        port: PORT,
+        environment: process.env.NODE_ENV,
+        timestamp: new Date().toISOString()
+      });
     });
-  });
+
+    server.on('error', (error) => {
+      console.error('Server Startup Error:', error);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
 };
 
 startServer();
