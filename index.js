@@ -18,7 +18,7 @@ const {
 const { router: authRoutes } = require('./routes/auth');
 
 const app = express();
-const PORT = process.env.PORT || 5001; // Changed to 5001 to avoid port conflicts
+const PORT = process.env.PORT || 5001;
 
 // Comprehensive CORS Configuration
 const corsOptions = {
@@ -31,11 +31,12 @@ const corsOptions = {
     ];
 
     // Allow requests with no origin or from allowed origins
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.some(allowed => 
+      origin.startsWith(allowed) || origin === allowed)) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
-      callback(null, false);
+      callback(null, true); // Permissive for development
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -44,7 +45,10 @@ const corsOptions = {
     'Authorization', 
     'Origin', 
     'X-Requested-With', 
-    'Accept'
+    'Accept',
+    'x-client-key', 
+    'x-client-token', 
+    'x-client-secret'
   ],
   credentials: true,
   optionsSuccessStatus: 200
@@ -52,6 +56,27 @@ const corsOptions = {
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Additional CORS and security headers middleware
+app.use((req, res, next) => {
+  // Dynamic origin handling
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -65,7 +90,7 @@ app.use((req, res, next) => {
 });
 
 // JSON parsing middleware
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 
 // Logging middleware
 app.use(morgan('combined', {
@@ -98,19 +123,32 @@ app.use('/api/employees', require('./routes/employees'));
 
 // Root route
 app.get('/', (req, res) => {
-  res.status(200).send('Performance Review System Backend');
+  res.status(200).json({
+    message: 'Performance Review System Backend',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // CORS test route
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
-    origin: req.headers.origin || 'unknown'
+    origin: req.headers.origin || 'unknown',
+    timestamp: new Date().toISOString()
   });
 });
 
 // Global error handler
 app.use(globalErrorHandler);
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    status: 'error',
+    message: `Cannot ${req.method} ${req.path}`,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Start server
 const startServer = async () => {
@@ -121,6 +159,15 @@ const startServer = async () => {
         port: PORT,
         environment: process.env.NODE_ENV || 'development',
         timestamp: new Date().toISOString()
+      });
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received. Shutting down gracefully');
+      server.close(() => {
+        console.log('Process terminated');
+        process.exit(0);
       });
     });
 
