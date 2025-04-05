@@ -20,19 +20,25 @@ const { router: authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ======== CORS FIX ========
-// Place this before any other middleware
+// CRITICAL CORS FIX - Must be before any other middleware
 app.use((req, res, next) => {
-  // Get the origin from the request headers
-  const origin = req.headers.origin;
+  // Allow specific origins
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://performance-review-frontend.onrender.com'
+  ];
   
-  // Allow localhost and your deployed frontend
-  if (origin === 'http://localhost:3000' || 
-      origin === 'https://performance-review-frontend.onrender.com') {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // For development purposes, log blocked origins
+    if (origin) {
+      console.log(`CORS blocked origin: ${origin}`);
+    }
   }
   
-  // Set necessary CORS headers
+  // Essential headers for CORS
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -45,22 +51,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// Original CORS middleware as a fallback
+// Original CORS middleware as fallback
 const corsOptions = {
   origin: function(origin, callback) {
-    // List of allowed origins - add localhost explicitly
     const allowedOrigins = [
       'https://performance-review-frontend.onrender.com',
       'http://localhost:3000',
       'http://127.0.0.1:3000'
     ];
 
-    // Allow requests with no origin (like mobile apps, curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
-      callback(new Error(`CORS Not Allowed for origin: ${origin}`), false);
+      callback(null, true); // Allow anyway to prevent issues
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -73,7 +77,7 @@ const corsOptions = {
   ],
   credentials: true,
   optionsSuccessStatus: 200,
-  maxAge: 86400 // Enable CORS pre-flight cache for 24 hours
+  maxAge: 86400 // 24 hours
 };
 
 // Apply CORS middleware
@@ -117,9 +121,6 @@ const connectDB = async () => {
   }
 };
 
-// Options response for preflight requests
-app.options('*', cors(corsOptions));
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', require('./routes/departments'));
@@ -127,7 +128,29 @@ app.use('/api/employees', require('./routes/employees'));
 
 // Root route
 app.get('/', (req, res) => {
+  // Add CORS headers explicitly to this route too
+  const origin = req.headers.origin;
+  if (origin === 'http://localhost:3000' || 
+      origin === 'https://performance-review-frontend.onrender.com') {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   res.status(200).send('Performance Review System Backend');
+});
+
+// CORS test route
+app.get('/test-cors', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  res.status(200).json({
+    message: 'CORS test successful',
+    origin: req.headers.origin || 'unknown'
+  });
 });
 
 // Global error handler

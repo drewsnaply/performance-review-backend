@@ -85,10 +85,11 @@ router.post('/register', catchAsync(async (req, res, next) => {
 
   // Set explicit CORS headers for the response
   const origin = req.headers.origin;
-  if (origin) {
+  if (origin === 'http://localhost:3000' || 
+      origin === 'https://performance-review-frontend.onrender.com') {
     res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
   }
+  res.header('Access-Control-Allow-Credentials', 'true');
 
   res.status(201).json({
     token,
@@ -96,7 +97,7 @@ router.post('/register', catchAsync(async (req, res, next) => {
   });
 }));
 
-// Login user with enhanced CORS handling
+// Login user
 router.post('/login', catchAsync(async (req, res, next) => {
   console.log('LOGIN REQUEST:', {
     body: { username: req.body.username }, // Avoid logging password
@@ -151,12 +152,12 @@ router.post('/login', catchAsync(async (req, res, next) => {
 
   // Set explicit CORS headers for the response
   const origin = req.headers.origin;
-  if (origin) {
+  if (origin === 'http://localhost:3000' || 
+      origin === 'https://performance-review-frontend.onrender.com') {
     res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
   }
+  res.header('Access-Control-Allow-Credentials', 'true');
 
-  // Set response
   res.status(200).json({
     token,
     user: userResponse,
