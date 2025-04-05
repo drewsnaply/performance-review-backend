@@ -24,18 +24,29 @@ const corsOptions = {
   origin: function(origin, callback) {
     const allowedOrigins = [
       'http://localhost:3000', 
-      'https://performance-review-frontend.onrender.com',
-      'https://performance-review-backend.onrender.com'
+      'https://performance-review-frontend.onrender.com'
     ];
     
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    console.log('CORS Origin Check:', {
+      origin,
+      allowed: allowedOrigins,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('CORS not allowed'));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Origin', 
+    'X-Requested-With', 
+    'Accept'
+  ],
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -45,15 +56,16 @@ app.use(cors(corsOptions));
 
 // Detailed logging middleware
 app.use((req, res, next) => {
-  console.log('Incoming Request Details:', {
+  console.log('Incoming Request:', {
     method: req.method,
     path: req.path,
     origin: req.get('origin'),
+    timestamp: new Date().toISOString(),
     headers: req.headers,
     body: req.body
   });
   
-  // Add CORS headers manually
+  // Manual CORS headers for additional flexibility
   res.header('Access-Control-Allow-Origin', req.get('origin') || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
@@ -79,20 +91,25 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    logger.info('MongoDB connected successfully');
+    console.log('MongoDB Connection:', {
+      status: 'Connected',
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
+    console.error('MongoDB Connection Error:', {
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
     process.exit(1);
   }
 };
 
-// Routes
+// Routes with logging
 app.use('/api/auth', (req, res, next) => {
-  console.log('AUTH ROUTE - Request Details:', {
-    timestamp: new Date().toISOString(),
+  console.log('AUTH Route Request:', {
     body: req.body,
     headers: req.headers,
-    origin: req.get('origin')
+    timestamp: new Date().toISOString()
   });
   next();
 }, authRoutes);
@@ -112,7 +129,11 @@ app.use(globalErrorHandler);
 const startServer = async () => {
   await connectDB();
   app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT}`);
+    console.log(`Server Running:`, {
+      port: PORT,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
   });
 };
 
