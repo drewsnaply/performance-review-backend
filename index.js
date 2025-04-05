@@ -18,53 +18,24 @@ const {
 const { router: authRoutes } = require('./routes/auth');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001; // Changed to 5001 to avoid port conflicts
 
-// CRITICAL CORS FIX - Must be before any other middleware
-app.use((req, res, next) => {
-  // Allow specific origins
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'https://performance-review-frontend.onrender.com'
-  ];
-  
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  } else {
-    // For development purposes, log blocked origins
-    if (origin) {
-      console.log(`CORS blocked origin: ${origin}`);
-    }
-  }
-  
-  // Essential headers for CORS
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
-
-// Original CORS middleware as fallback
+// Comprehensive CORS Configuration
 const corsOptions = {
   origin: function(origin, callback) {
+    // List of allowed origins
     const allowedOrigins = [
-      'https://performance-review-frontend.onrender.com',
       'http://localhost:3000',
+      'https://performance-review-frontend.onrender.com',
       'http://127.0.0.1:3000'
     ];
 
+    // Allow requests with no origin or from allowed origins
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
-      callback(null, true); // Allow anyway to prevent issues
+      callback(null, false);
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -76,14 +47,13 @@ const corsOptions = {
     'Accept'
   ],
   credentials: true,
-  optionsSuccessStatus: 200,
-  maxAge: 86400 // 24 hours
+  optionsSuccessStatus: 200
 };
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Debug middleware to log CORS issues
+// Logging middleware
 app.use((req, res, next) => {
   console.log('Incoming Request:', {
     method: req.method,
@@ -108,8 +78,8 @@ app.use(morgan('combined', {
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
     });
     console.log('MongoDB Connection Successful', new Date().toISOString());
   } catch (error) {
@@ -128,25 +98,11 @@ app.use('/api/employees', require('./routes/employees'));
 
 // Root route
 app.get('/', (req, res) => {
-  // Add CORS headers explicitly to this route too
-  const origin = req.headers.origin;
-  if (origin === 'http://localhost:3000' || 
-      origin === 'https://performance-review-frontend.onrender.com') {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
   res.status(200).send('Performance Review System Backend');
 });
 
 // CORS test route
 app.get('/test-cors', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
   res.status(200).json({
     message: 'CORS test successful',
     origin: req.headers.origin || 'unknown'
@@ -160,10 +116,10 @@ app.use(globalErrorHandler);
 const startServer = async () => {
   try {
     await connectDB();
-    const server = app.listen(PORT, () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server Running:`, {
         port: PORT,
-        environment: process.env.NODE_ENV,
+        environment: process.env.NODE_ENV || 'development',
         timestamp: new Date().toISOString()
       });
     });
@@ -179,4 +135,4 @@ const startServer = async () => {
 
 startServer();
 
-module.exports = app;"// Force Git change $(date)" 
+module.exports = app;
