@@ -4,7 +4,8 @@ const User = require('../models/User');
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
-// Note: Removed the router-level CORS middleware since global CORS is now handled in index.js
+// NOTE: Removed router-level CORS middleware settings.
+// Global CORS is now handled in index.js—this file no longer sets its own CORS headers.
 
 // Function to generate a JWT Token
 const generateToken = (user) => {
