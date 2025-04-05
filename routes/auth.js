@@ -1,23 +1,12 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const cors = require('cors');
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
-// **Fix: Updated CORS Middleware**
-const corsOptions = {
-  origin: ['http://localhost:3000', 'https://performance-review-frontend.onrender.com'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-};
+// Note: Removed the router-level CORS middleware since global CORS is now handled in index.js
 
-// Apply CORS middleware globally (fixing dynamic issues)
-router.use(cors(corsOptions));
-router.options('*', cors(corsOptions)); // Handle preflight requests properly
-
-// Generate JWT Token
+// Function to generate a JWT Token
 const generateToken = (user) => {
   try {
     return jwt.sign(
@@ -124,7 +113,6 @@ router.get('/me', protect, catchAsync(async (req, res, next) => {
   res.json(user);
 }));
 
-// Export router and middleware
 module.exports = {
   router,
   protect,

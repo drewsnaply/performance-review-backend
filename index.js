@@ -3,13 +3,7 @@ const mongoose = require('mongoose');
 const morgan = require('morgan');
 require('dotenv').config();
 
-const {
-  AppError,
-  catchAsync,
-  globalErrorHandler,
-  logger,
-} = require('./errorHandler');
-
+const { AppError, catchAsync, globalErrorHandler, logger } = require('./errorHandler');
 const { router: authRoutes } = require('./routes/auth');
 const departmentsRoutes = require('./routes/departments');
 const employeesRoutes = require('./routes/employees');
@@ -17,7 +11,7 @@ const employeesRoutes = require('./routes/employees');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Define allowed origins
+// Define allowed origins (adjust if needed)
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -25,61 +19,37 @@ const allowedOrigins = [
 ];
 
 /**
- * Custom CORS middleware:
- * - Checks the request's Origin header and sets the proper CORS headers.
- * - For preflight OPTIONS requests, sends an immediate 200 response.
+ * Global CORS middleware.
+ *
+ * - Checks if the incoming request's origin is allowed and sets it,
+ *   falling back to your production URL if the origin does not match.
+ * - Handles preflight OPTIONS requests immediately.
  */
 app.use((req, res, next) => {
   const origin = req.get('origin') || '';
-  let allowedOrigin = 'https://performance-review-frontend.onrender.com'; // Fallback
-  if (allowedOrigins.includes(origin)) {
-    allowedOrigin = origin;
-  }
-  // Set CORS headers
+  const allowedOrigin = allowedOrigins.includes(origin) ? origin : 'https://performance-review-frontend.onrender.com';
+
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  // Handle preflight request
+  // Immediately respond to OPTIONS (preflight) requests.
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
 
-// JSON Parsing Middleware
+// Parse JSON bodies
 app.use(express.json({ limit: '10kb' }));
 
-// Logging Middleware
-app.use((req, res, next) => {
-  console.log(`Incoming ${req.method} request from origin: ${req.get('origin')} to ${req.path}`);
-  next();
-});
+// Logging middleware (using morgan and your custom logger)
 app.use(
   morgan('combined', {
-    stream: {
-      write: (message) => logger.info(message.trim()),
-    },
+    stream: { write: (message) => logger.info(message.trim()) },
   })
 );
-
-// Connect to MongoDB
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    console.log('✅ MongoDB Connection Successful', new Date().toISOString());
-  } catch (error) {
-    console.error('❌ MongoDB Connection Failed:', {
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
-    process.exit(1);
-  }
-};
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -94,7 +64,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// CORS Test Route
+// CORS Test Route (to verify headers in production)
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
@@ -104,25 +74,24 @@ app.get('/test-cors', (req, res) => {
 });
 
 /**
- * Global Error Handler (with forced CORS headers):
- * Ensures that even on errors, the response includes the necessary headers.
+ * Global Error Handler.
+ *
+ * This error handler adds the same CORS headers to error responses,
+ * ensuring your frontend will always get the required header.
  */
 app.use((err, req, res, next) => {
-  if (!res.headersSent) {
-    const origin = req.get('origin') || '';
-    let allowedOrigin = 'https://performance-review-frontend.onrender.com';
-    if (allowedOrigins.includes(origin)) {
-      allowedOrigin = origin;
-    }
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
+  const origin = req.get('origin') || '';
+  const allowedOrigin = allowedOrigins.includes(origin) ? origin : 'https://performance-review-frontend.onrender.com';
+
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
   return globalErrorHandler(err, req, res, next);
 });
 
-// 404 Handler for Undefined Routes
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     status: 'error',
@@ -131,7 +100,20 @@ app.use((req, res) => {
   });
 });
 
-// Start Server
+// Connect to MongoDB and start the server
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    console.log('✅ MongoDB Connection Successful', new Date().toISOString());
+  } catch (error) {
+    console.error('❌ MongoDB Connection Failed:', error.message);
+    process.exit(1);
+  }
+};
+
 const startServer = async () => {
   await connectDB();
   const server = app.listen(PORT, '0.0.0.0', () => {
@@ -142,7 +124,7 @@ const startServer = async () => {
     });
   });
 
-  // Graceful Shutdown Handling
+  // Graceful shutdown handling
   process.on('SIGTERM', () => {
     console.log('⚠️ SIGTERM received. Shutting down gracefully...');
     server.close(() => {
