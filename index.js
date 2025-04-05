@@ -19,52 +19,17 @@ const { router: authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Define allowed origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'https://performance-review-frontend.onrender.com',
-];
-
-// ✅ Comprehensive CORS Configuration
+// ✅ Simplified CORS Configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.error('🚨 CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://performance-review-frontend.onrender.com'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'Origin',
-    'X-Requested-With',
-    'Accept',
-    'x-client-key',
-    'x-client-token',
-    'x-client-secret',
-  ],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  optionsSuccessStatus: 200, // Avoid legacy browser issues
 };
 
 // ✅ Apply CORS middleware globally
 app.use(cors(corsOptions));
-
-// ✅ Explicitly Handle Preflight Requests
-app.options('*', (req, res) => {
-  const origin = req.get('origin');
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.status(200).end();
-});
+app.options('*', cors(corsOptions)); // Properly handles preflight requests
 
 // ✅ Logging middleware
 app.use((req, res, next) => {
