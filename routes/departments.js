@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Department = require('../models/Department');
 const { catchAsync, AppError } = require('../errorHandler');
+
+// FIXED: Import middleware directly using object destructuring with the updated export method
 const { protect, authorize } = require('./auth');
 
 // GET all departments (only for managers and admins)
