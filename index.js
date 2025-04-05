@@ -26,14 +26,13 @@ const allowedOrigins = [
   'https://performance-review-frontend.onrender.com',
 ];
 
-// Comprehensive CORS configuration
+// ✅ Comprehensive CORS Configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., mobile apps or Postman) or from allowed origins
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error('CORS blocked origin:', origin);
+      console.error('🚨 CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -49,13 +48,25 @@ const corsOptions = {
     'x-client-secret',
   ],
   credentials: true,
-  optionsSuccessStatus: 200,
+  optionsSuccessStatus: 200, // Avoid legacy browser issues
 };
 
-// Apply CORS middleware
+// ✅ Apply CORS middleware globally
 app.use(cors(corsOptions));
 
-// Logging middleware
+// ✅ Explicitly Handle Preflight Requests
+app.options('*', (req, res) => {
+  const origin = req.get('origin');
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
+// ✅ Logging middleware
 app.use((req, res, next) => {
   console.log('Incoming Request:', {
     method: req.method,
@@ -66,10 +77,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// JSON parsing middleware
+// ✅ JSON Parsing Middleware
 app.use(express.json({ limit: '10kb' }));
 
-// Logging middleware
+// ✅ Request Logging
 app.use(
   morgan('combined', {
     stream: {
@@ -78,16 +89,16 @@ app.use(
   })
 );
 
-// Connect to MongoDB
+// ✅ Connect to MongoDB
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
-    console.log('MongoDB Connection Successful', new Date().toISOString());
+    console.log('✅ MongoDB Connection Successful', new Date().toISOString());
   } catch (error) {
-    console.error('MongoDB Connection Failed:', {
+    console.error('❌ MongoDB Connection Failed:', {
       message: error.message,
       timestamp: new Date().toISOString(),
     });
@@ -95,12 +106,12 @@ const connectDB = async () => {
   }
 };
 
-// Routes
+// ✅ Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', require('./routes/departments'));
 app.use('/api/employees', require('./routes/employees'));
 
-// Root route
+// ✅ Root Route
 app.get('/', (req, res) => {
   res.status(200).json({
     message: 'Performance Review System Backend',
@@ -108,7 +119,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// CORS test route
+// ✅ CORS Test Route
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
@@ -117,10 +128,10 @@ app.get('/test-cors', (req, res) => {
   });
 });
 
-// Global error handler
+// ✅ Global Error Handler
 app.use(globalErrorHandler);
 
-// 404 handler for undefined routes
+// ✅ 404 Handler for Undefined Routes
 app.use((req, res) => {
   res.status(404).json({
     status: 'error',
@@ -129,32 +140,32 @@ app.use((req, res) => {
   });
 });
 
-// Start server
+// ✅ Start Server
 const startServer = async () => {
   try {
     await connectDB();
     const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log('Server Running:', {
+      console.log('🚀 Server Running:', {
         port: PORT,
         environment: process.env.NODE_ENV || 'development',
         timestamp: new Date().toISOString(),
       });
     });
 
-    // Graceful shutdown
+    // Graceful Shutdown Handling
     process.on('SIGTERM', () => {
-      console.log('SIGTERM received. Shutting down gracefully');
+      console.log('⚠️ SIGTERM received. Shutting down gracefully...');
       server.close(() => {
-        console.log('Process terminated');
+        console.log('✅ Process terminated');
         process.exit(0);
       });
     });
 
     server.on('error', (error) => {
-      console.error('Server Startup Error:', error);
+      console.error('❌ Server Startup Error:', error);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('❌ Failed to Start Server:', error);
     process.exit(1);
   }
 };
