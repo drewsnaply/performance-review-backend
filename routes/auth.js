@@ -4,9 +4,6 @@ const User = require('../models/User');
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
-// NOTE: Removed router-level CORS middleware settings.
-// Global CORS is now handled in index.js—this file no longer sets its own CORS headers.
-
 // Function to generate a JWT Token
 const generateToken = (user) => {
   try {
@@ -50,6 +47,8 @@ router.post('/register', catchAsync(async (req, res, next) => {
 
 // Login user
 router.post('/login', catchAsync(async (req, res, next) => {
+  console.log('Login attempt for:', req.body.username);
+  
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -74,6 +73,9 @@ router.post('/login', catchAsync(async (req, res, next) => {
   const userResponse = user.toObject();
   delete userResponse.password;
 
+  // Log successful login
+  console.log('Login successful for:', username);
+  
   res.status(200).json({ token, user: userResponse });
 }));
 
@@ -88,14 +90,18 @@ const protect = catchAsync(async (req, res, next) => {
     return next(new AppError('Not authorized, no token', 401));
   }
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  const currentUser = await User.findById(decoded.id);
-  if (!currentUser) {
-    return next(new AppError('The user no longer exists', 401));
-  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUser = await User.findById(decoded.id);
+    if (!currentUser) {
+      return next(new AppError('The user no longer exists', 401));
+    }
 
-  req.user = currentUser;
-  next();
+    req.user = currentUser;
+    next();
+  } catch (error) {
+    return next(new AppError('Invalid token', 401));
+  }
 });
 
 // Role-based authorization middleware

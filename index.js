@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const morgan = require('morgan');
+const cors = require('cors');
 require('dotenv').config();
 
 const { AppError, catchAsync, globalErrorHandler, logger } = require('./errorHandler');
@@ -11,40 +12,38 @@ const employeesRoutes = require('./routes/employees');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Define allowed origins (adjust if needed)
+// Define allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
   'https://performance-review-frontend.onrender.com'
 ];
 
-/**
- * Global CORS middleware.
- *
- * - Checks if the incoming request's origin is allowed and sets it,
- *   falling back to your production URL if the origin does not match.
- * - Handles preflight OPTIONS requests immediately.
- */
-app.use((req, res, next) => {
-  const origin = req.get('origin') || '';
-  const allowedOrigin = allowedOrigins.includes(origin) ? origin : 'https://performance-review-frontend.onrender.com';
+// Configure and use the cors package
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // If not in allowed origins, default to the frontend URL
+      callback(null, 'https://performance-review-frontend.onrender.com');
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  credentials: true
+}));
 
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  // Immediately respond to OPTIONS (preflight) requests.
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+// Handle OPTIONS requests explicitly
+app.options('*', cors());
 
 // Parse JSON bodies
 app.use(express.json({ limit: '10kb' }));
 
-// Logging middleware (using morgan and your custom logger)
+// Logging middleware
 app.use(
   morgan('combined', {
     stream: { write: (message) => logger.info(message.trim()) },
@@ -64,32 +63,18 @@ app.get('/', (req, res) => {
   });
 });
 
-// CORS Test Route (to verify headers in production)
+// CORS Test Route
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
     origin: req.get('origin') || 'unknown',
+    headers: req.headers,
     timestamp: new Date().toISOString(),
   });
 });
 
-/**
- * Global Error Handler.
- *
- * This error handler adds the same CORS headers to error responses,
- * ensuring your frontend will always get the required header.
- */
-app.use((err, req, res, next) => {
-  const origin = req.get('origin') || '';
-  const allowedOrigin = allowedOrigins.includes(origin) ? origin : 'https://performance-review-frontend.onrender.com';
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  return globalErrorHandler(err, req, res, next);
-});
+// Global Error Handler
+app.use(globalErrorHandler);
 
 // 404 Handler
 app.use((req, res) => {
