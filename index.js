@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const morgan = require('morgan');
@@ -19,19 +18,43 @@ const { router: authRoutes } = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Simplified CORS Configuration
-const corsOptions = {
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://performance-review-frontend.onrender.com'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-};
+// Define allowed origins (both localhost and production)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://performance-review-frontend.onrender.com',
+];
 
-// ✅ Apply CORS middleware globally
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Properly handles preflight requests
+/**
+ * Custom CORS middleware that:
+ * - Checks if the incoming Origin header is in our allowedOrigins array.
+ * - Sets the Access-Control-Allow-* headers accordingly.
+ * - Handles preflight OPTIONS requests.
+ */
+app.use((req, res, next) => {
+  const requestOrigin = req.get('origin');
+  if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
+    // Set the origin to the request origin if allowed (or if no origin provided)
+    res.header('Access-Control-Allow-Origin', requestOrigin || 'https://performance-review-frontend.onrender.com');
+  } else {
+    // For unrecognized origins, you can either block or fallback to a specific domain
+    res.header('Access-Control-Allow-Origin', 'https://performance-review-frontend.onrender.com');
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // If this is a preflight OPTIONS request, respond immediately.
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 
-// ✅ Logging middleware
+// ✅ JSON Parsing Middleware
+app.use(express.json({ limit: '10kb' }));
+
+// ✅ Logging middleware to log each incoming request
 app.use((req, res, next) => {
   console.log('Incoming Request:', {
     method: req.method,
@@ -42,10 +65,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ JSON Parsing Middleware
-app.use(express.json({ limit: '10kb' }));
-
-// ✅ Request Logging
+// ✅ Request Logging using Morgan
 app.use(
   morgan('combined', {
     stream: {
