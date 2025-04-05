@@ -1,6 +1,5 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const path = require('path');
 const morgan = require('morgan');
 require('dotenv').config();
 
@@ -12,60 +11,49 @@ const {
   logger,
 } = require('./errorHandler');
 
-// Import routes with destructuring
 const { router: authRoutes } = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Define allowed origins (both localhost and production)
+// Define allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://performance-review-frontend.onrender.com',
+  'https://performance-review-frontend.onrender.com'
 ];
 
 /**
- * Custom CORS middleware that:
- * - Checks if the incoming Origin header is in our allowedOrigins array.
- * - Sets the Access-Control-Allow-* headers accordingly.
- * - Handles preflight OPTIONS requests.
+ * Custom CORS middleware:
+ * - Checks the request's Origin header and sets the Access-Control-Allow-* headers accordingly.
+ * - For OPTIONS (preflight) requests, it responds immediately.
  */
 app.use((req, res, next) => {
-  const requestOrigin = req.get('origin');
-  if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
-    // Set the origin to the request origin if allowed (or if no origin provided)
-    res.header('Access-Control-Allow-Origin', requestOrigin || 'https://performance-review-frontend.onrender.com');
-  } else {
-    // For unrecognized origins, you can either block or fallback to a specific domain
-    res.header('Access-Control-Allow-Origin', 'https://performance-review-frontend.onrender.com');
+  const origin = req.get('origin') || '';
+  let allowedOrigin = 'https://performance-review-frontend.onrender.com'; // Fallback
+
+  if (allowedOrigins.includes(origin)) {
+    allowedOrigin = origin;
   }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // If this is a preflight OPTIONS request, respond immediately.
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+  );
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  // If this is a preflight request, send a quick response.
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.sendStatus(200);
   }
   next();
 });
 
-// ✅ JSON Parsing Middleware
+// JSON Parsing Middleware
 app.use(express.json({ limit: '10kb' }));
 
-// ✅ Logging middleware to log each incoming request
-app.use((req, res, next) => {
-  console.log('Incoming Request:', {
-    method: req.method,
-    path: req.path,
-    origin: req.get('origin'),
-    timestamp: new Date().toISOString(),
-  });
-  next();
-});
-
-// ✅ Request Logging using Morgan
+// Logging Middleware
 app.use(
   morgan('combined', {
     stream: {
@@ -74,7 +62,7 @@ app.use(
   })
 );
 
-// ✅ Connect to MongoDB
+// Connect to MongoDB
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -91,12 +79,12 @@ const connectDB = async () => {
   }
 };
 
-// ✅ Routes
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', require('./routes/departments'));
 app.use('/api/employees', require('./routes/employees'));
 
-// ✅ Root Route
+// Root Route
 app.get('/', (req, res) => {
   res.status(200).json({
     message: 'Performance Review System Backend',
@@ -104,7 +92,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ CORS Test Route
+// CORS Test Route
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
@@ -113,10 +101,10 @@ app.get('/test-cors', (req, res) => {
   });
 });
 
-// ✅ Global Error Handler
+// Global Error Handler
 app.use(globalErrorHandler);
 
-// ✅ 404 Handler for Undefined Routes
+// 404 Handler for Undefined Routes
 app.use((req, res) => {
   res.status(404).json({
     status: 'error',
@@ -125,7 +113,7 @@ app.use((req, res) => {
   });
 });
 
-// ✅ Start Server
+// Start Server
 const startServer = async () => {
   try {
     await connectDB();
