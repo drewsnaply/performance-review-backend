@@ -5,23 +5,17 @@ const cors = require('cors');
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
-// Set up CORS middleware
+// **Fix: Updated CORS Middleware**
 const corsOptions = {
-  origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:3000', 'https://performance-review-frontend.onrender.com'];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: ['http://localhost:3000', 'https://performance-review-frontend.onrender.com'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-// Apply CORS middleware globally for this router
+// Apply CORS middleware globally (fixing dynamic issues)
 router.use(cors(corsOptions));
+router.options('*', cors(corsOptions)); // Handle preflight requests properly
 
 // Generate JWT Token
 const generateToken = (user) => {
@@ -134,5 +128,5 @@ router.get('/me', protect, catchAsync(async (req, res, next) => {
 module.exports = {
   router,
   protect,
-  authorize, // Ensure authorize is correctly exported
+  authorize,
 };
