@@ -7,11 +7,12 @@ const {
   AppError,
   catchAsync,
   globalErrorHandler,
-  unhandledRouteHandler,
   logger,
 } = require('./errorHandler');
 
 const { router: authRoutes } = require('./routes/auth');
+const departmentsRoutes = require('./routes/departments');
+const employeesRoutes = require('./routes/employees');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,25 +26,22 @@ const allowedOrigins = [
 
 /**
  * Custom CORS middleware:
- * - Checks the request's Origin header and sets the Access-Control-Allow-* headers accordingly.
- * - For OPTIONS (preflight) requests, it responds immediately.
+ * - Checks the request's Origin header and sets the proper CORS headers.
+ * - For preflight OPTIONS requests, sends an immediate 200 response.
  */
 app.use((req, res, next) => {
   const origin = req.get('origin') || '';
   let allowedOrigin = 'https://performance-review-frontend.onrender.com'; // Fallback
-
   if (allowedOrigins.includes(origin)) {
     allowedOrigin = origin;
   }
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-  );
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  // If this is a preflight request, send a quick response.
+  // Handle preflight request
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -54,6 +52,10 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10kb' }));
 
 // Logging Middleware
+app.use((req, res, next) => {
+  console.log(`Incoming ${req.method} request from origin: ${req.get('origin')} to ${req.path}`);
+  next();
+});
 app.use(
   morgan('combined', {
     stream: {
@@ -81,8 +83,8 @@ const connectDB = async () => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/departments', require('./routes/departments'));
-app.use('/api/employees', require('./routes/employees'));
+app.use('/api/departments', departmentsRoutes);
+app.use('/api/employees', employeesRoutes);
 
 // Root Route
 app.get('/', (req, res) => {
@@ -96,13 +98,29 @@ app.get('/', (req, res) => {
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
-    origin: req.headers.origin || 'unknown',
+    origin: req.get('origin') || 'unknown',
     timestamp: new Date().toISOString(),
   });
 });
 
-// Global Error Handler
-app.use(globalErrorHandler);
+/**
+ * Global Error Handler (with forced CORS headers):
+ * Ensures that even on errors, the response includes the necessary headers.
+ */
+app.use((err, req, res, next) => {
+  if (!res.headersSent) {
+    const origin = req.get('origin') || '';
+    let allowedOrigin = 'https://performance-review-frontend.onrender.com';
+    if (allowedOrigins.includes(origin)) {
+      allowedOrigin = origin;
+    }
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  return globalErrorHandler(err, req, res, next);
+});
 
 // 404 Handler for Undefined Routes
 app.use((req, res) => {
@@ -115,32 +133,27 @@ app.use((req, res) => {
 
 // Start Server
 const startServer = async () => {
-  try {
-    await connectDB();
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log('🚀 Server Running:', {
-        port: PORT,
-        environment: process.env.NODE_ENV || 'development',
-        timestamp: new Date().toISOString(),
-      });
+  await connectDB();
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log('🚀 Server Running:', {
+      port: PORT,
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString(),
     });
+  });
 
-    // Graceful Shutdown Handling
-    process.on('SIGTERM', () => {
-      console.log('⚠️ SIGTERM received. Shutting down gracefully...');
-      server.close(() => {
-        console.log('✅ Process terminated');
-        process.exit(0);
-      });
+  // Graceful Shutdown Handling
+  process.on('SIGTERM', () => {
+    console.log('⚠️ SIGTERM received. Shutting down gracefully...');
+    server.close(() => {
+      console.log('✅ Process terminated');
+      process.exit(0);
     });
+  });
 
-    server.on('error', (error) => {
-      console.error('❌ Server Startup Error:', error);
-    });
-  } catch (error) {
-    console.error('❌ Failed to Start Server:', error);
-    process.exit(1);
-  }
+  server.on('error', (error) => {
+    console.error('❌ Server Startup Error:', error);
+  });
 };
 
 startServer();
