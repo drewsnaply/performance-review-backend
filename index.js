@@ -14,31 +14,22 @@ const {
   logger,
 } = require('./errorHandler');
 
-const { authRoutes } = require('./routes/auth');
+// FIXED: Changed to use the new export method from auth.js
+const { router: authRoutes } = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Comprehensive CORS Configuration
 const corsOptions = {
-  origin: function(origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000', 
-      'https://performance-review-frontend.onrender.com'
-    ];
-    
-    console.log('CORS Origin Check:', {
-      origin,
-      allowed: allowedOrigins,
-      timestamp: new Date().toISOString()
-    });
-
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS not allowed'));
-    }
-  },
+  origin: [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://performance-review-frontend.onrender.com',
+    'https://performance-review-frontend.onrender.com/', // Include with trailing slash
+    'https://performance-review-backend.onrender.com',
+    'https://performance-review-backend.onrender.com/' // Include with trailing slash
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type', 
@@ -48,11 +39,15 @@ const corsOptions = {
     'Accept'
   ],
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  preflightContinue: false
 };
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Add explicit options handling for CORS preflight requests
+app.options('*', cors(corsOptions));
 
 // Detailed logging middleware
 app.use((req, res, next) => {
