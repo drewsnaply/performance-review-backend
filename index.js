@@ -99,8 +99,37 @@ const connectDB = async () => {
   }
 };
 
+// Create default admin user function
+const createDefaultAdmin = async () => {
+  try {
+    const User = require('./models/User');
+    // Check if user already exists
+    const exists = await User.findOne({ username: 'manager1' });
+    if (!exists) {
+      console.log('Creating default admin user...');
+      const newUser = new User({
+        username: 'manager1', 
+        email: 'manager1@example.com',
+        password: 'password123', // This will be hashed by the model
+        role: 'manager',
+        isActive: true
+      });
+      await newUser.save();
+      console.log('✅ Default admin user created');
+    } else {
+      console.log('✅ Default admin user already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error creating default user:', error);
+  }
+};
+
 const startServer = async () => {
   await connectDB();
+  
+  // Create default admin user
+  await createDefaultAdmin();
+  
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('🚀 Server Running:', {
       port: PORT,
