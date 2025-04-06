@@ -30,7 +30,20 @@ const EmployeeSchema = new Schema({
     required: true,
     trim: true
   },
+  // Primary job title field
   position: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  // Added for frontend compatibility
+  jobTitle: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  // Added for frontend compatibility
+  title: {
     type: String,
     required: false,
     trim: true
@@ -68,6 +81,10 @@ const EmployeeSchema = new Schema({
     required: false,
     trim: true
   },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   status: {
     type: String,
     default: 'Active',
@@ -81,6 +98,19 @@ const EmployeeSchema = new Schema({
   timestamps: true,  // Adds createdAt and updatedAt fields
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
+});
+
+// Pre-save middleware to synchronize job title fields
+EmployeeSchema.pre('save', function(next) {
+  // Find the non-empty job title (if any)
+  const jobTitle = this.position || this.jobTitle || this.title || '';
+  
+  // Synchronize all job title fields
+  this.position = jobTitle;
+  this.jobTitle = jobTitle;
+  this.title = jobTitle;
+  
+  next();
 });
 
 // Optional: Add a virtual field for full name
