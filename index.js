@@ -28,17 +28,29 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      // If not in allowed origins, default to the frontend URL
-      callback(null, 'https://performance-review-frontend.onrender.com');
+      // For security in production, log the unauthorized origin attempt
+      console.warn(`CORS attempt from unauthorized origin: ${origin}`);
+      // Allow it anyway for troubleshooting (you can make this more restrictive later)
+      callback(null, true);
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  credentials: true
+  credentials: true,
+  maxAge: 86400 // CORS preflight cache time in seconds (24 hours)
 }));
 
 // Handle OPTIONS requests explicitly
 app.options('*', cors());
+
+// Add CORS headers manually as a fallback
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', allowedOrigins.includes(req.headers.origin) ? req.headers.origin : 'https://performance-review-frontend.onrender.com');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
 // Parse JSON bodies
 app.use(express.json({ limit: '10kb' }));
