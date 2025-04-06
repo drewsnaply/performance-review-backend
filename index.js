@@ -12,43 +12,21 @@ const employeesRoutes = require('./routes/employees');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Define allowed origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'https://performance-review-frontend.onrender.com'
-];
+// CORS Configuration - Simple approach
+app.use(cors());
 
-// Configure and use the cors package
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, postman)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      // For security in production, log the unauthorized origin attempt
-      console.warn(`CORS attempt from unauthorized origin: ${origin}`);
-      // Allow it anyway for troubleshooting (you can make this more restrictive later)
-      callback(null, true);
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  credentials: true,
-  maxAge: 86400 // CORS preflight cache time in seconds (24 hours)
-}));
-
-// Handle OPTIONS requests explicitly
-app.options('*', cors());
-
-// Add CORS headers manually as a fallback
+// Add CORS headers for every request
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', allowedOrigins.includes(req.headers.origin) ? req.headers.origin : 'https://performance-review-frontend.onrender.com');
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   next();
 });
 
