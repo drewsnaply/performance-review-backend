@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const Employee = require('../models/Employee');
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
@@ -26,12 +26,24 @@ router.post('/register', catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide username, email, and password', 400));
   }
 
-  const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+  const existingUser = await Employee.findOne({ $or: [{ email }, { username }] });
   if (existingUser) {
     return next(new AppError('User with this email or username already exists', 400));
   }
 
-  const newUser = new User({ username, email, password, role: role || 'employee' });
+  // Only allow creating users with roles up to admin
+  // superadmin can only be created programmatically or by another superadmin
+  const allowedRoles = ['employee', 'manager', 'admin'];
+  const userRole = role && allowedRoles.includes(role) ? role : 'employee';
+
+  const newUser = new Employee({ 
+    username, 
+    email, 
+    password, 
+    role: userRole,
+    department: req.body.department || 'Unassigned'
+  });
+  
   const savedUser = await newUser.save();
 
   const token = generateToken(savedUser);
@@ -55,7 +67,7 @@ router.post('/login', catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide both username and password', 400));
   }
 
-  const user = await User.findOne({ username }).select('+password');
+  const user = await Employee.findOne({ username }).select('+password');
   if (!user) {
     return next(new AppError('Invalid credentials', 401));
   }
@@ -82,6 +94,7 @@ router.post('/login', catchAsync(async (req, res, next) => {
 // Middleware to protect routes
 const protect = catchAsync(async (req, res, next) => {
   let token;
+  
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
@@ -92,11 +105,13 @@ const protect = catchAsync(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const currentUser = await User.findById(decoded.id);
+    const currentUser = await Employee.findById(decoded.id);
+    
     if (!currentUser) {
       return next(new AppError('The user no longer exists', 401));
     }
-
+    
+    // Add user info to the request
     req.user = currentUser;
     next();
   } catch (error) {
@@ -104,24 +119,154 @@ const protect = catchAsync(async (req, res, next) => {
   }
 });
 
-// Role-based authorization middleware
+// Enhanced role-based authorization middleware
 const authorize = (...roles) => {
   return (req, res, next) => {
+    // Super admin can always access
+    if (req.user.role === 'superadmin') {
+      return next();
+    }
+    
+    // Check if user's role is in the allowed roles
     if (!roles.includes(req.user.role)) {
       return next(new AppError('You do not have permission to perform this action', 403));
     }
+    
     next();
   };
 };
 
+// Resource-specific authorization middleware
+const canAccess = (resourceType) => {
+  return async (req, res, next) => {
+    try {
+      // Super admin can always access
+      if (req.user.role === 'superadmin') {
+        return next();
+      }
+      
+      const resourceId = req.params.id;
+      
+      switch (resourceType) {
+        case 'employee':
+          if (req.user.role === 'admin') {
+            return next(); // Admins can access all employees
+          }
+          
+          // Check if this is the user's own profile or a direct report
+          if (req.user.canManageEmployee(resourceId)) {
+            return next();
+          }
+          break;
+          
+        case 'department':
+          if (req.user.role === 'admin') {
+            return next(); // Admins can access all departments
+          }
+          
+          // Check if user manages this department
+          if (req.user.canManageDepartment(resourceId)) {
+            return next();
+          }
+          break;
+          
+        default:
+          // Unknown resource type
+          return next(new AppError('Access check failed: Unknown resource type', 500));
+      }
+      
+      // If we get here, access should be denied
+      return next(new AppError('You do not have permission to access this resource', 403));
+    } catch (error) {
+      console.error('Access check error:', error);
+      return next(new AppError('Access check failed', 500));
+    }
+  };
+};
+
+// Promote user to a higher role (admin or superadmin only)
+router.patch('/promote/:id', protect, authorize('admin', 'superadmin'), catchAsync(async (req, res, next) => {
+  const { role } = req.body;
+  const { id } = req.params;
+  
+  // Validate the requested role
+  const validRoles = ['employee', 'manager', 'admin'];
+  
+  // Add superadmin to valid roles only if current user is superadmin
+  if (req.user.role === 'superadmin') {
+    validRoles.push('superadmin');
+  }
+  
+  if (!role || !validRoles.includes(role)) {
+    return next(new AppError('Invalid role specified', 400));
+  }
+  
+  // Prevent promoting to superadmin unless current user is superadmin
+  if (role === 'superadmin' && req.user.role !== 'superadmin') {
+    return next(new AppError('Only superadmins can promote to superadmin', 403));
+  }
+  
+  // Find user to promote
+  const userToPromote = await Employee.findById(id);
+  if (!userToPromote) {
+    return next(new AppError('User not found', 404));
+  }
+  
+  // Update the user's role
+  userToPromote.role = role;
+  await userToPromote.save();
+  
+  res.status(200).json({
+    status: 'success',
+    message: `User ${userToPromote.username} promoted to ${role}`,
+    data: {
+      user: userToPromote
+    }
+  });
+}));
+
 // Get current user profile
-router.get('/me', protect, catchAsync(async (req, res, next) => {
-  const user = await User.findById(req.user.id);
-  res.json(user);
+router.get('/me', protect, catchAsync(async (req, res) => {
+  // User is already attached to req from the protect middleware
+  res.status(200).json({
+    status: 'success',
+    data: {
+      user: req.user
+    }
+  });
+}));
+
+// Reset password for a user (admin or superadmin only)
+router.post('/reset-password/:id', protect, authorize('admin', 'superadmin'), catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  
+  const user = await Employee.findById(id);
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+  
+  // Generate a temporary password
+  const tempPassword = 'TemporaryPass123!';
+  
+  // Update the user with the temporary password
+  user.password = tempPassword;
+  user.requirePasswordChange = true;
+  await user.save();
+  
+  // In a real system, you would send an email with the reset link or temp password
+  // For now, we'll just return the temp password in the response
+  res.status(200).json({
+    status: 'success',
+    message: 'Password has been reset',
+    data: {
+      tempPassword // In production, don't include this in the response!
+    }
+  });
 }));
 
 module.exports = {
   router,
   protect,
   authorize,
+  canAccess
 };
