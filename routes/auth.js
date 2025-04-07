@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const Employee = require('../models/Employee');
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
@@ -69,11 +70,27 @@ router.post('/login', catchAsync(async (req, res, next) => {
 
   const user = await Employee.findOne({ username }).select('+password');
   if (!user) {
+    console.log('User not found:', username);
     return next(new AppError('Invalid credentials', 401));
   }
 
-  const isMatch = await user.comparePassword(password);
+  // Detailed logging for debugging
+  console.log('User found:', {
+    id: user._id,
+    username: user.username,
+    role: user.role
+  });
+
+  let isMatch = false;
+  try {
+    isMatch = await bcrypt.compare(password, user.password);
+  } catch (error) {
+    console.error('Password comparison error:', error);
+    return next(new AppError('Authentication error', 500));
+  }
+
   if (!isMatch) {
+    console.log('Password mismatch for user:', username);
     return next(new AppError('Invalid credentials', 401));
   }
 
