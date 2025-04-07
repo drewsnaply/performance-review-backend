@@ -22,28 +22,23 @@ const allowedOrigins = [
 // Configure and use the cors package
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, postman)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      // For security in production, log the unauthorized origin attempt
       console.warn(`CORS attempt from unauthorized origin: ${origin}`);
-      // Allow it anyway for troubleshooting (you can make this more restrictive later)
       callback(null, true);
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
   credentials: true,
-  maxAge: 86400 // CORS preflight cache time in seconds (24 hours)
+  maxAge: 86400
 }));
 
-// Handle OPTIONS requests explicitly
 app.options('*', cors());
 
-// Add CORS headers manually as a fallback
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', allowedOrigins.includes(req.headers.origin) ? req.headers.origin : 'https://performance-review-frontend.onrender.com');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -52,22 +47,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// Parse JSON bodies
 app.use(express.json({ limit: '10kb' }));
 
-// Logging middleware
 app.use(
   morgan('combined', {
     stream: { write: (message) => logger.info(message.trim()) },
   })
 );
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentsRoutes);
 app.use('/api/employees', employeesRoutes);
 
-// Root Route
 app.get('/', (req, res) => {
   res.status(200).json({
     message: 'Performance Review System Backend',
@@ -75,7 +66,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// CORS Test Route
 app.get('/test-cors', (req, res) => {
   res.status(200).json({
     message: 'CORS test successful',
@@ -85,10 +75,8 @@ app.get('/test-cors', (req, res) => {
   });
 });
 
-// Global Error Handler
 app.use(globalErrorHandler);
 
-// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     status: 'error',
@@ -97,7 +85,6 @@ app.use((req, res) => {
   });
 });
 
-// Connect to MongoDB and start the server
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -115,24 +102,47 @@ const connectDB = async () => {
 const createDefaultAdmin = async () => {
   try {
     const User = require('./models/User');
-    // Check if user already exists
-    const exists = await User.findOne({ username: 'manager1' });
-    if (!exists) {
-      console.log('Creating default admin user...');
-      const newUser = new User({
+    
+    // Check if any users exist
+    const userCount = await User.countDocuments();
+    
+    if (userCount === 0) {
+      console.log('No users found. Creating default users...');
+      
+      // Create manager user
+      const managerUser = new User({
         username: 'manager1', 
         email: 'manager1@example.com',
-        password: 'password123', // This will be hashed by the model
+        password: 'Manager123!', // Strong, unique password
+        firstName: 'Manager',
+        lastName: 'User',
         role: 'manager',
-        isActive: true
+        department: 'Management',
+        isActive: true,
+        requirePasswordChange: true
       });
-      await newUser.save();
+      await managerUser.save();
+      console.log('✅ Default manager user created');
+
+      // Optional: Create an admin user
+      const adminUser = new User({
+        username: 'admin', 
+        email: 'admin@example.com',
+        password: 'Admin123!', // Strong, unique password
+        firstName: 'Admin',
+        lastName: 'User',
+        role: 'admin',
+        department: 'Administration',
+        isActive: true,
+        requirePasswordChange: true
+      });
+      await adminUser.save();
       console.log('✅ Default admin user created');
     } else {
-      console.log('✅ Default admin user already exists');
+      console.log(`✅ Existing users found: ${userCount}`);
     }
   } catch (error) {
-    console.error('❌ Error creating default user:', error);
+    console.error('❌ Error creating default users:', error);
   }
 };
 
@@ -150,7 +160,6 @@ const startServer = async () => {
     });
   });
 
-  // Graceful shutdown handling
   process.on('SIGTERM', () => {
     console.log('⚠️ SIGTERM received. Shutting down gracefully...');
     server.close(() => {
