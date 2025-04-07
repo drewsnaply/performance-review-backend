@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
@@ -11,7 +11,7 @@ const generateToken = (user) => {
     return jwt.sign(
       { id: user._id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
     );
   } catch (error) {
     console.error('Token Generation Error:', error);
@@ -27,7 +27,7 @@ router.post('/register', catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide username, email, and password', 400));
   }
 
-  const existingUser = await Employee.findOne({ $or: [{ email }, { username }] });
+  const existingUser = await User.findOne({ $or: [{ email }, { username }] });
   if (existingUser) {
     return next(new AppError('User with this email or username already exists', 400));
   }
@@ -37,7 +37,7 @@ router.post('/register', catchAsync(async (req, res, next) => {
   const allowedRoles = ['employee', 'manager', 'admin'];
   const userRole = role && allowedRoles.includes(role) ? role : 'employee';
 
-  const newUser = new Employee({ 
+  const newUser = new User({ 
     username, 
     email, 
     password, 
@@ -61,6 +61,8 @@ router.post('/register', catchAsync(async (req, res, next) => {
 // Login user
 router.post('/login', catchAsync(async (req, res, next) => {
   console.log('Login attempt for:', req.body.username);
+  console.log('Database being used:', mongoose.connection.db.databaseName);
+  console.log('Collection being searched:', User.collection.name);
   
   const { username, password } = req.body;
 
@@ -68,7 +70,7 @@ router.post('/login', catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide both username and password', 400));
   }
 
-  const user = await Employee.findOne({ username }).select('+password');
+  const user = await User.findOne({ username }).select('+password');
   if (!user) {
     console.log('User not found:', username);
     return next(new AppError('Invalid credentials', 401));
@@ -83,7 +85,7 @@ router.post('/login', catchAsync(async (req, res, next) => {
 
   let isMatch = false;
   try {
-    isMatch = await bcrypt.compare(password, user.password);
+    isMatch = await user.comparePassword(password); // Using the model method
   } catch (error) {
     console.error('Password comparison error:', error);
     return next(new AppError('Authentication error', 500));
@@ -122,7 +124,7 @@ const protect = catchAsync(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const currentUser = await Employee.findById(decoded.id);
+    const currentUser = await User.findById(decoded.id);
     
     if (!currentUser) {
       return next(new AppError('The user no longer exists', 401));
@@ -171,7 +173,7 @@ const canAccess = (resourceType) => {
           }
           
           // Check if this is the user's own profile or a direct report
-          if (req.user.canManageEmployee(resourceId)) {
+          if (req.user._id.toString() === resourceId || (req.user.role === 'manager')) {
             return next();
           }
           break;
@@ -181,8 +183,8 @@ const canAccess = (resourceType) => {
             return next(); // Admins can access all departments
           }
           
-          // Check if user manages this department
-          if (req.user.canManageDepartment(resourceId)) {
+          // Check if user is a manager
+          if (req.user.role === 'manager') {
             return next();
           }
           break;
@@ -224,7 +226,7 @@ router.patch('/promote/:id', protect, authorize('admin', 'superadmin'), catchAsy
   }
   
   // Find user to promote
-  const userToPromote = await Employee.findById(id);
+  const userToPromote = await User.findById(id);
   if (!userToPromote) {
     return next(new AppError('User not found', 404));
   }
@@ -257,7 +259,7 @@ router.get('/me', protect, catchAsync(async (req, res) => {
 router.post('/reset-password/:id', protect, authorize('admin', 'superadmin'), catchAsync(async (req, res, next) => {
   const { id } = req.params;
   
-  const user = await Employee.findById(id);
+  const user = await User.findById(id);
   if (!user) {
     return next(new AppError('User not found', 404));
   }
@@ -280,6 +282,9 @@ router.post('/reset-password/:id', protect, authorize('admin', 'superadmin'), ca
     }
   });
 }));
+
+// Add mongoose import at the top
+const mongoose = require('mongoose');
 
 module.exports = {
   router,
