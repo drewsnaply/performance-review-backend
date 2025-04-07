@@ -103,15 +103,27 @@ const createDefaultAdmin = async () => {
   try {
     const User = require('./models/User');
     
-    // Check if any users exist
-    const userCount = await User.countDocuments();
+    // Log all existing users
+    const allUsers = await User.find({});
+    console.log('All existing users:', allUsers.map(u => ({
+      username: u.username,
+      email: u.email,
+      role: u.role
+    })));
     
-    if (userCount === 0) {
-      console.log('No users found. Creating default users...');
-      
-      // Create manager user
-      const managerUser = new User({
-        username: 'manager1', 
+    const userCount = await User.countDocuments();
+    console.log(`Total user count: ${userCount}`);
+    
+    const managerUsername = 'manager1';
+    const adminUsername = 'admin';
+
+    // Check if manager user exists
+    const managerUser = await User.findOne({ username: managerUsername });
+
+    if (!managerUser) {
+      console.log(`Manager user "${managerUsername}" not found. Creating...`);
+      const newManagerUser = new User({
+        username: managerUsername, 
         email: 'manager1@example.com',
         password: 'Manager123!', // Strong, unique password
         firstName: 'Manager',
@@ -121,12 +133,19 @@ const createDefaultAdmin = async () => {
         isActive: true,
         requirePasswordChange: true
       });
-      await managerUser.save();
+      await newManagerUser.save();
       console.log('✅ Default manager user created');
+    } else {
+      console.log(`✅ Manager user "${managerUsername}" already exists`);
+    }
 
-      // Optional: Create an admin user
-      const adminUser = new User({
-        username: 'admin', 
+    // Check if admin user exists
+    const adminUser = await User.findOne({ username: adminUsername });
+
+    if (!adminUser) {
+      console.log(`Admin user "${adminUsername}" not found. Creating...`);
+      const newAdminUser = new User({
+        username: adminUsername, 
         email: 'admin@example.com',
         password: 'Admin123!', // Strong, unique password
         firstName: 'Admin',
@@ -136,10 +155,10 @@ const createDefaultAdmin = async () => {
         isActive: true,
         requirePasswordChange: true
       });
-      await adminUser.save();
+      await newAdminUser.save();
       console.log('✅ Default admin user created');
     } else {
-      console.log(`✅ Existing users found: ${userCount}`);
+      console.log(`✅ Admin user "${adminUsername}" already exists`);
     }
   } catch (error) {
     console.error('❌ Error creating default users:', error);
