@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const User = require('../models/User'); // Changed from Employee to User
+const mongoose = require('mongoose');
+const User = require('../models/User'); // CHANGED: Using User model instead of Employee
 const { catchAsync, AppError } = require('../errorHandler');
 const router = express.Router();
 
@@ -11,7 +11,7 @@ const generateToken = (user) => {
     return jwt.sign(
       { id: user._id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
+      { expiresIn: '1d' }
     );
   } catch (error) {
     console.error('Token Generation Error:', error);
@@ -61,8 +61,7 @@ router.post('/register', catchAsync(async (req, res, next) => {
 // Login user
 router.post('/login', catchAsync(async (req, res, next) => {
   console.log('Login attempt for:', req.body.username);
-  console.log('Database being used:', mongoose.connection.db.databaseName);
-  console.log('Collection being searched:', User.collection.name);
+  console.log('Database collection being queried:', User.collection.name);
   
   const { username, password } = req.body;
 
@@ -70,29 +69,19 @@ router.post('/login', catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide both username and password', 400));
   }
 
+  // CHANGED: Added select('+password') to include password in query result
   const user = await User.findOne({ username }).select('+password');
+  
   if (!user) {
-    console.log('User not found:', username);
+    console.log(`User not found: ${username}`);
     return next(new AppError('Invalid credentials', 401));
   }
 
-  // Detailed logging for debugging
-  console.log('User found:', {
-    id: user._id,
-    username: user.username,
-    role: user.role
-  });
-
-  let isMatch = false;
-  try {
-    isMatch = await user.comparePassword(password); // Using the model method
-  } catch (error) {
-    console.error('Password comparison error:', error);
-    return next(new AppError('Authentication error', 500));
-  }
-
+  console.log(`User found: ${username}, checking password...`);
+  
+  const isMatch = await user.comparePassword(password);
   if (!isMatch) {
-    console.log('Password mismatch for user:', username);
+    console.log(`Invalid password for user: ${username}`);
     return next(new AppError('Invalid credentials', 401));
   }
 
@@ -155,43 +144,18 @@ const authorize = (...roles) => {
   };
 };
 
-// Resource-specific authorization middleware
+// Simplified resource-specific authorization middleware
 const canAccess = (resourceType) => {
   return async (req, res, next) => {
     try {
       // Super admin can always access
-      if (req.user.role === 'superadmin') {
+      if (req.user.role === 'superadmin' || req.user.role === 'admin') {
         return next();
       }
       
-      const resourceId = req.params.id;
-      
-      switch (resourceType) {
-        case 'employee':
-          if (req.user.role === 'admin') {
-            return next(); // Admins can access all employees
-          }
-          
-          // Check if this is the user's own profile or a direct report
-          if (req.user._id.toString() === resourceId || (req.user.role === 'manager')) {
-            return next();
-          }
-          break;
-          
-        case 'department':
-          if (req.user.role === 'admin') {
-            return next(); // Admins can access all departments
-          }
-          
-          // Check if user is a manager
-          if (req.user.role === 'manager') {
-            return next();
-          }
-          break;
-          
-        default:
-          // Unknown resource type
-          return next(new AppError('Access check failed: Unknown resource type', 500));
+      // For now, simplified logic - managers can access some things
+      if (req.user.role === 'manager' && ['department', 'employee'].includes(resourceType)) {
+        return next();
       }
       
       // If we get here, access should be denied
@@ -282,9 +246,6 @@ router.post('/reset-password/:id', protect, authorize('admin', 'superadmin'), ca
     }
   });
 }));
-
-// Add mongoose import at the top
-const mongoose = require('mongoose');
 
 module.exports = {
   router,
