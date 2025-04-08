@@ -7,7 +7,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 // If MONGODB_URI is still undefined, set a default
 if (!process.env.MONGODB_URI) {
   console.warn("MONGODB_URI not found in environment, using hardcoded connection string");
-  process.env.MONGODB_URI = 'mongodb+srv://amintzell:IloveTJbear@prod-performance-cluste.yx3j8vu.mongodb.net/test?retryWrites=true&w=majority';
+  process.env.MONGODB_URI = 'mongodb+srv://amintzell:Ireallylovehockey@prod-performance-cluste.yx3j8vu.mongodb.net/test?retryWrites=true&w=majority';
 }
 
 console.log("MONGODB_URI is defined:", !!process.env.MONGODB_URI);

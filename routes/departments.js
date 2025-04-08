@@ -78,7 +78,8 @@ router.post('/', protect, authorize('admin', 'superadmin'), catchAsync(async (re
       });
     }
     
-    res.status(201).json(department);
+    // Send the response with the 'data' property
+    res.status(201).json({ data: department });
   } catch (error) {
     if (error.code === 11000) { // Duplicate key error
       return next(new AppError('A department with this name already exists', 400));
