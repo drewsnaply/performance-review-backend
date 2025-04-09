@@ -6,8 +6,9 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 // If MONGODB_URI is still undefined, set a default
 if (!process.env.MONGODB_URI) {
-  console.warn("MONGODB_URI not found in environment, using hardcoded connection string");
-  process.env.MONGODB_URI = 'mongodb+srv://amintzell:Ireallylovehockey@prod-performance-cluste.yx3j8vu.mongodb.net/test?retryWrites=true&w=majority';
+  console.warn("MONGODB_URI not found in environment. Check your .env file.");
+  // Either exit the application or use a local development fallback
+  process.env.MONGODB_URI = 'mongodb://localhost:27017/performance-review-db';
 }
 
 console.log("MONGODB_URI is defined:", !!process.env.MONGODB_URI);
@@ -22,6 +23,11 @@ const { AppError, catchAsync, globalErrorHandler, logger } = require('./errorHan
 const { router: authRoutes } = require('./routes/auth');
 const departmentsRoutes = require('./routes/departments');
 const employeesRoutes = require('./routes/employees');
+
+// Import the new route files
+const reviewRoutes = require('./routes/reviews');
+const compensationRoutes = require('./routes/compensation');
+const positionRoutes = require('./routes/positions');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -72,6 +78,11 @@ app.use(
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentsRoutes);
 app.use('/api/employees', employeesRoutes);
+
+// Use the new routes
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/compensation', compensationRoutes);
+app.use('/api/positions', positionRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({

@@ -110,7 +110,107 @@ const EmployeeSchema = new Schema({
   requirePasswordChange: {
     type: Boolean,
     default: true
-  }
+  },
+  
+  // New fields for enhanced employee records
+  
+  // Array of references to PositionHistory documents
+  positionHistory: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'PositionHistory'
+  }],
+
+  // Array of references to CompensationHistory documents
+  compensationHistory: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CompensationHistory'
+  }],
+
+  // Array of references to Review documents
+  reviews: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Review'
+  }],
+
+  // Skills tracking
+  skills: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    proficiencyLevel: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: 1
+    },
+    yearsOfExperience: {
+      type: Number,
+      default: 0
+    },
+    lastUsed: {
+      type: Date
+    },
+    notes: {
+      type: String,
+      trim: true
+    }
+  }],
+
+  // Current compensation details (for quick access)
+  currentCompensation: {
+    salary: {
+      type: Number
+    },
+    salaryType: {
+      type: String,
+      enum: ['Annual', 'Monthly', 'Hourly'],
+      default: 'Annual'
+    },
+    currency: {
+      type: String,
+      default: 'USD'
+    },
+    lastReviewDate: {
+      type: Date
+    }
+  },
+
+  // Development and training
+  professionalDevelopment: {
+    careerGoals: {
+      type: String,
+      trim: true
+    },
+    trainingNeeds: {
+      type: String,
+      trim: true
+    }
+  },
+
+  // Certifications
+  certifications: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    issuingOrganization: {
+      type: String,
+      trim: true
+    },
+    issueDate: {
+      type: Date
+    },
+    expirationDate: {
+      type: Date
+    },
+    credentialID: {
+      type: String,
+      trim: true
+    }
+  }]
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
