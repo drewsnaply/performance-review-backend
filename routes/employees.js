@@ -172,4 +172,51 @@ router.delete('/:id', protect, authorize('admin'), catchAsync(async (req, res, n
   res.status(204).send();
 }));
 
+// NEW: POST route for adding skills to an employee
+router.post('/:id/skills', protect, authorize('manager', 'admin'), catchAsync(async (req, res, next) => {
+  const employeeId = req.params.id;
+  
+  console.log('Adding skill for employee:', employeeId);
+  console.log('Skill data:', req.body);
+
+  try {
+    const employee = await Employee.findById(employeeId);
+
+    if (!employee) {
+      return next(new AppError('Employee not found', 404));
+    }
+
+    // Validate skill data
+    if (!req.body.name) {
+      return next(new AppError('Skill name is required', 400));
+    }
+
+    // Add the new skill to the skills array
+    employee.skills.push({
+      name: req.body.name,
+      proficiencyLevel: req.body.proficiencyLevel || 1,
+      yearsOfExperience: req.body.yearsOfExperience || 0,
+      lastUsed: req.body.lastUsed || new Date(),
+      notes: req.body.notes || ''
+    });
+
+    // Save the updated employee
+    const updatedEmployee = await employee.save();
+
+    console.log('Updated employee:', updatedEmployee);
+
+    res.status(201).json(updatedEmployee);
+  } catch (error) {
+    console.error('Error adding skill:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return next(new AppError(`Validation Error: ${messages.join(', ')}`, 400));
+    }
+    
+    next(new AppError('Error adding skill', 500));
+  }
+}));
+
 module.exports = router;
