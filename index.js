@@ -23,6 +23,7 @@ const { AppError, catchAsync, globalErrorHandler, logger } = require('./errorHan
 const { router: authRoutes } = require('./routes/auth');
 const departmentsRoutes = require('./routes/departments');
 const employeesRoutes = require('./routes/employees');
+const performanceRoutes = require('./routes/performance');
 
 // Import the new route files
 const reviewRoutes = require('./routes/reviews');
@@ -56,6 +57,8 @@ app.use(cors({
   credentials: true,
   maxAge: 86400
 }));
+
+app.use('/api/performance', performanceRoutes);
 
 app.options('*', cors());
 
