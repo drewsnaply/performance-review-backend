@@ -73,11 +73,11 @@ router.post('/assign', protect, authorize('admin', 'manager'), catchAsync(async 
   // Create assignment
   const newAssignment = new ReviewTemplateAssignment({
     template: templateId,
-    employee: employeeId,
+    employee: employeeId, 
     reviewer: reviewerId,
     assignedBy: req.user.id,
     dueDate,
-    reviewPeriod,
+    reviewPeriod, 
     notes
   });
   
@@ -96,7 +96,7 @@ router.post('/assign', protect, authorize('admin', 'manager'), catchAsync(async 
 
 // Update assignment
 router.put('/assignments/:id', protect, catchAsync(async (req, res) => {
-  // Only allow updating certain fields
+  // Only allow updating certain fields 
   const allowedUpdates = ['status', 'notes', 'dueDate'];
   const updateData = {};
   
@@ -105,24 +105,24 @@ router.put('/assignments/:id', protect, catchAsync(async (req, res) => {
       updateData[key] = req.body[key];
     }
   });
-  
+
   if (req.body.status === 'Completed') {
     updateData.completionDate = new Date();
   }
-  
+
   const assignment = await ReviewTemplateAssignment.findById(req.params.id);
-  
+
   if (!assignment) {
     throw new AppError('Assignment not found', 404);
   }
-  
+
   // Only admin, the assigner, or the reviewer can update
   if (!req.user.isAdmin && 
       req.user.id !== assignment.assignedBy.toString() && 
       req.user.id !== assignment.reviewer.toString()) {
     throw new AppError('Not authorized to update this assignment', 403);
   }
-  
+
   // Update assignment
   const updatedAssignment = await ReviewTemplateAssignment.findByIdAndUpdate(
     req.params.id,
@@ -134,7 +134,7 @@ router.put('/assignments/:id', protect, catchAsync(async (req, res) => {
     { path: 'reviewer', select: 'firstName lastName position' },
     { path: 'assignedBy', select: 'firstName lastName' }
   ]);
-  
+
   res.status(200).json(updatedAssignment);
 }));
 
@@ -147,17 +147,17 @@ router.delete('/assignments/:id', protect, authorize('admin', 'manager'), catchA
   }
   
   // Only admin or the assigner can delete
-  if (!req.user.isAdmin && req.user.id !== assignment.assignedBy.toString()) {
+  if (!req.user.isAdmin && req.user.id !== assignment.assignedBy.toString()) { 
     throw new AppError('Not authorized to delete this assignment', 403);
   }
-  
+
   // Don't allow deleting completed assignments
   if (assignment.status === 'Completed') {
-    throw new AppError('Cannot delete completed assignments', 400);
+    throw new AppError('Cannot delete completed assignments', 400); 
   }
-  
+
   await assignment.deleteOne();
-  
+
   res.status(204).send();
 }));
 
@@ -165,21 +165,21 @@ router.delete('/assignments/:id', protect, authorize('admin', 'manager'), catchA
 router.post('/assignments/:id/start', protect, catchAsync(async (req, res) => {
   const assignment = await ReviewTemplateAssignment.findById(req.params.id)
     .populate('template');
-  
+
   if (!assignment) {
     throw new AppError('Assignment not found', 404);
   }
-  
+
   // Only the reviewer can start the review
   if (req.user.id !== assignment.reviewer.toString()) {
     throw new AppError('Not authorized to start this review', 403);
   }
-  
+
   // Don't allow starting if already completed
   if (assignment.status === 'Completed' || assignment.status === 'Canceled') {
     throw new AppError(`Cannot start a ${assignment.status.toLowerCase()} assignment`, 400);
   }
-  
+
   // Create a new review based on the template
   const newReview = new Review({
     employee: assignment.employee,
@@ -191,17 +191,17 @@ router.post('/assignments/:id/start', protect, catchAsync(async (req, res) => {
                 assignment.template.frequency === 'Quarterly' ? 'Quarterly' : 'Custom',
     // Add other fields from template as needed
   });
-  
+
   await newReview.save();
-  
+
   // Update assignment with created review and status
   assignment.createdReview = newReview._id;
   assignment.status = 'InProgress';
   await assignment.save();
-  
+
   res.status(201).json({
     assignment,
-    review: newReview
+    review: newReview 
   });
 }));
 
@@ -217,16 +217,28 @@ router.get('/:id', protect, catchAsync(async (req, res) => {
   res.status(200).json(template);
 }));
 
-// Create new template
+// Create new template  
 router.post('/', protect, authorize('admin', 'manager'), catchAsync(async (req, res) => {
-  const newTemplate = new ReviewTemplate({
-    ...req.body,
-    createdBy: req.user.id
-  });
+  console.log("Create template route hit");
+  console.log("User data:", req.user);
   
-  await newTemplate.save();
-  
-  res.status(201).json(newTemplate);
+  try {
+    // Create template
+    const newTemplate = new ReviewTemplate({
+      ...req.body,
+      createdBy: req.user.id // This should now match the 'User' reference
+    });
+    
+    console.log("Template instance created");
+    await newTemplate.save();
+    console.log("Template saved successfully");
+    
+    res.status(201).json(newTemplate);
+  } catch (error) {
+    console.error("Error creating template:", error.toString());
+    console.error("Error stack:", error.stack);
+    throw error;
+  }
 }));
 
 // Update template
