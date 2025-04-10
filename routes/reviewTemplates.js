@@ -16,69 +16,7 @@ router.get('/', protect, catchAsync(async (req, res) => {
   res.status(200).json(templates);
 }));
 
-// Get template by ID
-router.get('/:id', protect, catchAsync(async (req, res) => {
-  const template = await ReviewTemplate.findById(req.params.id)
-    .populate('createdBy', 'firstName lastName');
-  
-  if (!template) {
-    throw new AppError('Template not found', 404);
-  }
-  
-  res.status(200).json(template);
-}));
-
-// Create new template
-router.post('/', protect, authorize('admin', 'manager'), catchAsync(async (req, res) => {
-  const newTemplate = new ReviewTemplate({
-    ...req.body,
-    createdBy: req.user.id
-  });
-  
-  await newTemplate.save();
-  
-  res.status(201).json(newTemplate);
-}));
-
-// Update template
-router.put('/:id', protect, authorize('admin', 'manager'), catchAsync(async (req, res) => {
-  const template = await ReviewTemplate.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true, runValidators: true }
-  );
-  
-  if (!template) {
-    throw new AppError('Template not found', 404);
-  }
-  
-  res.status(200).json(template);
-}));
-
-// Delete template
-router.delete('/:id', protect, authorize('admin'), catchAsync(async (req, res) => {
-  const template = await ReviewTemplate.findById(req.params.id);
-  
-  if (!template) {
-    throw new AppError('Template not found', 404);
-  }
-  
-  // Check if template is being used in any assignments
-  const assignmentCount = await ReviewTemplateAssignment.countDocuments({ 
-    template: req.params.id,
-    status: { $in: ['Pending', 'InProgress'] }
-  });
-  
-  if (assignmentCount > 0) {
-    throw new AppError('Cannot delete template that is currently in use', 400);
-  }
-  
-  await template.deleteOne();
-  
-  res.status(204).send();
-}));
-
-// Get all assignments
+// Get all assignments - MOVED BEFORE THE ID ROUTE
 router.get('/assignments', protect, catchAsync(async (req, res) => {
   let query = {};
   
@@ -265,6 +203,68 @@ router.post('/assignments/:id/start', protect, catchAsync(async (req, res) => {
     assignment,
     review: newReview
   });
+}));
+
+// Get template by ID - MOVED AFTER THE /assignments ROUTE
+router.get('/:id', protect, catchAsync(async (req, res) => {
+  const template = await ReviewTemplate.findById(req.params.id)
+    .populate('createdBy', 'firstName lastName');
+  
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+  
+  res.status(200).json(template);
+}));
+
+// Create new template
+router.post('/', protect, authorize('admin', 'manager'), catchAsync(async (req, res) => {
+  const newTemplate = new ReviewTemplate({
+    ...req.body,
+    createdBy: req.user.id
+  });
+  
+  await newTemplate.save();
+  
+  res.status(201).json(newTemplate);
+}));
+
+// Update template
+router.put('/:id', protect, authorize('admin', 'manager'), catchAsync(async (req, res) => {
+  const template = await ReviewTemplate.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    { new: true, runValidators: true }
+  );
+  
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+  
+  res.status(200).json(template);
+}));
+
+// Delete template
+router.delete('/:id', protect, authorize('admin'), catchAsync(async (req, res) => {
+  const template = await ReviewTemplate.findById(req.params.id);
+  
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+  
+  // Check if template is being used in any assignments
+  const assignmentCount = await ReviewTemplateAssignment.countDocuments({ 
+    template: req.params.id,
+    status: { $in: ['Pending', 'InProgress'] }
+  });
+  
+  if (assignmentCount > 0) {
+    throw new AppError('Cannot delete template that is currently in use', 400);
+  }
+  
+  await template.deleteOne();
+  
+  res.status(204).send();
 }));
 
 module.exports = router;
