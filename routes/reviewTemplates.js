@@ -45,28 +45,35 @@ router.get('/assignments', protect, catchAsync(async (req, res) => {
 
 // Create new assignment
 router.post('/assign', protect, authorize('admin', 'manager'), catchAsync(async (req, res) => {
+  console.log("Assign template route hit");
+  console.log("Request body:", req.body);
+
   const { templateId, employeeId, reviewerId, dueDate, reviewPeriod, notes } = req.body;
   
   // Validate inputs
   if (!templateId || !employeeId || !reviewerId || !dueDate || !reviewPeriod) {
+    console.error("Missing required fields");
     throw new AppError('Missing required fields', 400);
   }
   
   // Check if template exists
   const template = await ReviewTemplate.findById(templateId);
   if (!template) {
+    console.error("Template not found");
     throw new AppError('Template not found', 404);
   }
   
   // Check if employee exists
   const employee = await Employee.findById(employeeId);
   if (!employee) {
+    console.error("Employee not found");
     throw new AppError('Employee not found', 404);
   }
   
   // Check if reviewer exists
   const reviewer = await Employee.findById(reviewerId);
   if (!reviewer) {
+    console.error("Reviewer not found");
     throw new AppError('Reviewer not found', 404);
   }
   
@@ -81,6 +88,8 @@ router.post('/assign', protect, authorize('admin', 'manager'), catchAsync(async 
     notes
   });
   
+  console.log("New assignment:", newAssignment);
+  
   await newAssignment.save();
   
   // Populate references for response
@@ -90,6 +99,8 @@ router.post('/assign', protect, authorize('admin', 'manager'), catchAsync(async 
     { path: 'reviewer', select: 'firstName lastName position' },
     { path: 'assignedBy', select: 'firstName lastName' }
   ]);
+  
+  console.log("Assignment created successfully");
   
   res.status(201).json(newAssignment);
 }));
