@@ -29,6 +29,7 @@ const performanceRoutes = require('./routes/performance');
 const reviewRoutes = require('./routes/reviews');
 const compensationRoutes = require('./routes/compensation');
 const positionRoutes = require('./routes/positions');
+const reviewTemplatesRoutes = require('./routes/reviewTemplates');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -86,6 +87,7 @@ app.use('/api/employees', employeesRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/compensation', compensationRoutes);
 app.use('/api/positions', positionRoutes);
+app.use('/api/templates', reviewTemplatesRoutes); 
 
 app.get('/', (req, res) => {
   res.status(200).json({
