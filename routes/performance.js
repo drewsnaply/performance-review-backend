@@ -3,7 +3,7 @@ const router = express.Router();
 const Review = require('../models/Review');
 const PositionHistory = require('../models/PositionHistory');
 const { catchAsync, AppError } = require('../errorHandler');
-const { protect } = require('./auth');
+const { protect, authorize } = require('./auth');
 
 // Helper functions for calculations
 const calculateOverallRating = (reviews) => {
@@ -108,6 +108,84 @@ router.get('/:employeeId', protect, catchAsync(async (req, res, next) => {
     console.error('Error fetching performance data:', error);
     next(new AppError('Error fetching performance data', 500));
   }
+}));
+
+// NEW ENDPOINT: Start a review
+router.post('/start/:reviewId', protect, authorize('manager', 'admin', 'superadmin'), catchAsync(async (req, res, next) => {
+  const reviewId = req.params.reviewId;
+  
+  // Find the review
+  const review = await Review.findById(reviewId);
+  
+  if (!review) {
+    return next(new AppError('Review not found', 404));
+  }
+  
+  // Check if the user has permission to start this review
+  const canStart = 
+    req.user.role === 'admin' || 
+    req.user.role === 'superadmin' ||
+    req.user._id.toString() === review.reviewer.toString();
+  
+  if (!canStart) {
+    return next(new AppError('You do not have permission to start this review', 403));
+  }
+  
+  // Check if review is in a state where it can be started
+  if (review.status !== 'Pending' && review.status !== 'Draft') {
+    return next(new AppError(`Review cannot be started from ${review.status} status`, 400));
+  }
+  
+  // Update the review status
+  review.status = 'In Progress';
+  review.startDate = new Date();
+  
+  await review.save();
+  
+  res.status(200).json({
+    success: true,
+    message: 'Review started successfully',
+    review
+  });
+}));
+
+// NEW ENDPOINT: Add a more specific endpoint based on the error URL pattern
+router.post('/b/:reviewId/start', protect, authorize('manager', 'admin', 'superadmin'), catchAsync(async (req, res, next) => {
+  const reviewId = req.params.reviewId;
+  
+  // Find the review
+  const review = await Review.findById(reviewId);
+  
+  if (!review) {
+    return next(new AppError('Review not found', 404));
+  }
+  
+  // Check if the user has permission to start this review
+  const canStart = 
+    req.user.role === 'admin' || 
+    req.user.role === 'superadmin' ||
+    req.user._id.toString() === review.reviewer.toString();
+  
+  if (!canStart) {
+    return next(new AppError('You do not have permission to start this review', 403));
+  }
+  
+  // Check if review is in a state where it can be started
+  if (review.status !== 'Pending' && review.status !== 'Draft') {
+    return next(new AppError(`Review cannot be started from ${review.status} status`, 400));
+  }
+  
+  // Update the review status
+  review.status = 'In Progress';
+  review.startDate = new Date();
+  
+  await review.save();
+  
+  res.status(200).json({
+    success: true,
+    message: 'Review started successfully',
+    review
+  });
 }));
 
 module.exports = router;
