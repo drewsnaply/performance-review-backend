@@ -172,48 +172,81 @@ router.delete('/assignments/:id', protect, authorize('admin', 'manager'), catchA
   res.status(204).send();
 }));
 
-// Start review from assignment
-router.post('/assignments/:id/start', protect, catchAsync(async (req, res) => {
-  const assignment = await ReviewTemplateAssignment.findById(req.params.id)
-    .populate('template');
+// Start review from assignment - UPDATED
+router.post('/assignments/:id/start', protect, catchAsync(async (req, res, next) => {
+  try {
+    console.log("Start review route hit for assignment ID:", req.params.id);
+    
+    const assignment = await ReviewTemplateAssignment.findById(req.params.id)
+      .populate('template')
+      .populate('employee')
+      .populate('reviewer');
 
-  if (!assignment) {
-    throw new AppError('Assignment not found', 404);
+    if (!assignment) {
+      console.error("Assignment not found with ID:", req.params.id);
+      throw new AppError('Assignment not found', 404);
+    }
+
+    // Only the reviewer can start the review (or admin)
+    if (req.user.id !== assignment.reviewer.toString() && !req.user.isAdmin) {
+      console.error("User unauthorized to start review. User ID:", req.user.id, "Reviewer ID:", assignment.reviewer.toString());
+      throw new AppError('Not authorized to start this review', 403);
+    }
+
+    // Don't allow starting if already completed or canceled
+    if (assignment.status === 'Completed' || assignment.status === 'Canceled') {
+      console.error(`Cannot start a ${assignment.status.toLowerCase()} assignment`);
+      throw new AppError(`Cannot start a ${assignment.status.toLowerCase()} assignment`, 400);
+    }
+
+    console.log("Creating new review for assignment");
+    
+    // Create a new review based on the template
+    const newReview = new Review({
+      employee: assignment.employee._id,
+      reviewer: assignment.reviewer._id,
+      reviewPeriod: assignment.reviewPeriod,
+      status: 'InProgress',
+      startDate: new Date(),
+      reviewType: assignment.template.frequency === 'Annually' ? 'Annual' : 
+                  assignment.template.frequency === 'Semi-Annually' ? 'Mid-Year' :
+                  assignment.template.frequency === 'Quarterly' ? 'Quarterly' : 'Custom',
+      // Add other fields from template as needed
+    });
+
+    await newReview.save();
+    console.log("New review created with ID:", newReview._id);
+
+    // Update assignment with created review and status
+    assignment.createdReview = newReview._id;
+    assignment.status = 'InProgress';
+    await assignment.save();
+    console.log("Assignment updated with review reference");
+
+    // Add reference to the employee's reviews array if that field exists
+    try {
+      if (assignment.employee && assignment.employee._id) {
+        await Employee.findByIdAndUpdate(assignment.employee._id, {
+          $push: { reviews: newReview._id }
+        });
+        console.log("Employee record updated with review reference");
+      }
+    } catch (employeeUpdateError) {
+      console.error("Error updating employee record, but continuing:", employeeUpdateError);
+      // Continue execution even if this fails
+    }
+
+    console.log("Review started successfully");
+    res.status(201).json({
+      success: true,
+      message: 'Review started successfully',
+      assignment,
+      review: newReview 
+    });
+  } catch (error) {
+    console.error('Error starting review:', error);
+    next(error);
   }
-
-  // Only the reviewer can start the review
-  if (req.user.id !== assignment.reviewer.toString()) {
-    throw new AppError('Not authorized to start this review', 403);
-  }
-
-  // Don't allow starting if already completed
-  if (assignment.status === 'Completed' || assignment.status === 'Canceled') {
-    throw new AppError(`Cannot start a ${assignment.status.toLowerCase()} assignment`, 400);
-  }
-
-  // Create a new review based on the template
-  const newReview = new Review({
-    employee: assignment.employee,
-    reviewer: assignment.reviewer,
-    reviewPeriod: assignment.reviewPeriod,
-    status: 'InProgress',
-    reviewType: assignment.template.frequency === 'Annually' ? 'Annual' : 
-                assignment.template.frequency === 'Semi-Annually' ? 'Mid-Year' :
-                assignment.template.frequency === 'Quarterly' ? 'Quarterly' : 'Custom',
-    // Add other fields from template as needed
-  });
-
-  await newReview.save();
-
-  // Update assignment with created review and status
-  assignment.createdReview = newReview._id;
-  assignment.status = 'InProgress';
-  await assignment.save();
-
-  res.status(201).json({
-    assignment,
-    review: newReview 
-  });
 }));
 
 // Get template by ID - MOVED AFTER THE /assignments ROUTE
