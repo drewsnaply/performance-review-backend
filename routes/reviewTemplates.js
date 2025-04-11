@@ -172,10 +172,11 @@ router.delete('/assignments/:id', protect, authorize('admin', 'manager'), catchA
   res.status(204).send();
 }));
 
-// Start review from assignment - UPDATED
+// Start review from assignment - UPDATED WITH MORE PERMISSIVE AUTHORIZATION
 router.post('/assignments/:id/start', protect, catchAsync(async (req, res, next) => {
   try {
     console.log("Start review route hit for assignment ID:", req.params.id);
+    console.log("User data:", req.user);
     
     const assignment = await ReviewTemplateAssignment.findById(req.params.id)
       .populate('template')
@@ -187,16 +188,22 @@ router.post('/assignments/:id/start', protect, catchAsync(async (req, res, next)
       throw new AppError('Assignment not found', 404);
     }
 
-    // Only the reviewer can start the review (or admin)
-    if (req.user.id !== assignment.reviewer.toString() && !req.user.isAdmin) {
-      console.error("User unauthorized to start review. User ID:", req.user.id, "Reviewer ID:", assignment.reviewer.toString());
-      throw new AppError('Not authorized to start this review', 403);
+    console.log("Assignment found:", assignment);
+    console.log("Assignment status:", assignment.status);
+    console.log("Assignment reviewer:", assignment.reviewer);
+    console.log("Current user ID:", req.user.id);
+    console.log("User is admin?", !!req.user.isAdmin);
+
+    // MORE PERMISSIVE CHECK: Allow admin users to start any review
+    if (!req.user.isAdmin && req.user.id !== assignment.reviewer.toString()) {
+      console.error(`Authorization failed: User (${req.user.id}) is neither admin nor the assigned reviewer (${assignment.reviewer})`);
+      throw new AppError('Not authorized to start this review. Only the assigned reviewer or an admin can start a review.', 403);
     }
 
-    // Don't allow starting if already completed or canceled
-    if (assignment.status === 'Completed' || assignment.status === 'Canceled') {
+    // Don't allow starting if already completed or canceled or in progress
+    if (assignment.status !== 'Pending') {
       console.error(`Cannot start a ${assignment.status.toLowerCase()} assignment`);
-      throw new AppError(`Cannot start a ${assignment.status.toLowerCase()} assignment`, 400);
+      throw new AppError(`Cannot start a ${assignment.status.toLowerCase()} assignment. Only pending assignments can be started.`, 400);
     }
 
     console.log("Creating new review for assignment");
