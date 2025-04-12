@@ -2,205 +2,412 @@ const express = require('express');
 const router = express.Router();
 const Review = require('../models/Review');
 const Employee = require('../models/Employee');
+const Goal = require('../models/Goal');
+const KPI = require('../models/KPI');
 const { catchAsync, AppError } = require('../errorHandler');
 const { protect, authorize } = require('./auth');
 
-// GET all reviews (filtered by role)
-router.get('/', protect, catchAsync(async (req, res, next) => {
-  let query = {};
+// Get all reviews (with filters)
+router.get('/', protect, catchAsync(async (req, res) => {
+  const query = {};
   
-  // Filter reviews based on the user's role
-  if (req.user.role === 'employee') {
-    // Employees can only see their own reviews
-    query.employee = req.user._id;
-  } else if (req.user.role === 'manager') {
-    // Managers can see reviews they conducted or for employees they manage
-    const managedEmployees = await Employee.find({ managedBy: req.user._id }).select('_id');
-    const managedEmployeeIds = managedEmployees.map(emp => emp._id);
-    
+  // Filter by status
+  if (req.query.status) {
+    query.status = req.query.status;
+  }
+  
+  // Filter by review type
+  if (req.query.type) {
+    query.reviewType = req.query.type;
+  }
+  
+  // Filter by employee
+  if (req.query.employee) {
+    query.employee = req.query.employee;
+  }
+  
+  // Filter by reviewer (the manager)
+  if (req.query.reviewer) {
+    query.reviewer = req.query.reviewer;
+  }
+  
+  // If user is not admin, only show reviews they're involved in
+  if (!req.user.isAdmin) {
     query.$or = [
-      { reviewer: req.user._id },
-      { employee: { $in: managedEmployeeIds } }
+      { employee: req.user.id },
+      { reviewer: req.user.id }
     ];
   }
-  // Admins and superadmins can see all reviews
   
   const reviews = await Review.find(query)
     .populate('employee', 'firstName lastName email')
     .populate('reviewer', 'firstName lastName email')
-    .sort({ submissionDate: -1 });
+    .populate('template', 'name frequency')
+    .sort({ updatedAt: -1 });
   
   res.status(200).json(reviews);
 }));
 
-// GET review by ID
-router.get('/:id', protect, catchAsync(async (req, res, next) => {
+// Get review by ID
+router.get('/:id', protect, catchAsync(async (req, res) => {
   const review = await Review.findById(req.params.id)
-    .populate('employee', 'firstName lastName email department position')
-    .populate('reviewer', 'firstName lastName email');
+    .populate('employee', 'firstName lastName email position department')
+    .populate('reviewer', 'firstName lastName email')
+    .populate('template', 'name frequency includesGoals includesKPIs includesSelfReview')
+    .populate({
+      path: 'goals',
+      populate: {
+        path: 'linkedKpi',
+        select: 'title category target'
+      }
+    });
   
   if (!review) {
-    return next(new AppError('Review not found', 404));
+    throw new AppError('Review not found', 404);
   }
   
-  // Check if user has permission to view this review
-  const canView = 
-    req.user.role === 'admin' || 
-    req.user.role === 'superadmin' ||
-    req.user._id.toString() === review.employee._id.toString() ||
-    req.user._id.toString() === review.reviewer._id.toString();
-    
-  if (!canView && req.user.role === 'manager') {
-    // Check if user manages the employee
-    const manages = await Employee.exists({ 
-      _id: review.employee._id, 
-      managedBy: req.user._id 
-    });
-    if (!manages) {
-      return next(new AppError('You do not have permission to view this review', 403));
-    }
-  } else if (!canView) {
-    return next(new AppError('You do not have permission to view this review', 403));
+  // Check if user has access to this review
+  if (!req.user.isAdmin && 
+    req.user.id !== review.employee._id.toString() && 
+    req.user.id !== review.reviewer._id.toString()) {
+    throw new AppError('Not authorized to access this review', 403);
   }
   
   res.status(200).json(review);
 }));
 
-// GET all reviews for a specific employee
-router.get('/employee/:employeeId', protect, catchAsync(async (req, res, next) => {
-  const employeeId = req.params.employeeId;
+// Create new review
+router.post('/', protect, authorize('manager', 'admin'), catchAsync(async (req, res) => {
+  const {
+    employeeId,
+    reviewType,
+    startDate,
+    endDate,
+    template,
+    includesGoals,
+    includesKPIs,
+    includesSelfReview
+  } = req.body;
   
-  // Check if employee exists
-  const employee = await Employee.findById(employeeId);
-  if (!employee) {
-    return next(new AppError('Employee not found', 404));
+  // Validate required fields
+  if (!employeeId || !reviewType || !startDate || !endDate) {
+    throw new AppError('Please provide all required fields', 400);
   }
   
-  // Check if user has permission to view this employee's reviews
-  const canView = 
-    req.user.role === 'admin' || 
-    req.user.role === 'superadmin' ||
-    req.user._id.toString() === employeeId;
-    
-  if (!canView && req.user.role === 'manager') {
-    // Check if user manages the employee
-    const manages = await Employee.exists({ 
-      _id: employeeId, 
-      managedBy: req.user._id 
-    });
-    if (!manages) {
-      return next(new AppError('You do not have permission to view reviews for this employee', 403));
-    }
-  } else if (!canView) {
-    return next(new AppError('You do not have permission to view reviews for this employee', 403));
-  }
-  
-  const reviews = await Review.find({ employee: employeeId })
-    .populate('reviewer', 'firstName lastName email')
-    .sort({ submissionDate: -1 });
-  
-  res.status(200).json(reviews);
-}));
-
-// POST new review
-router.post('/', protect, authorize('manager', 'admin', 'superadmin'), catchAsync(async (req, res, next) => {
-  const { employee, reviewType, reviewPeriod } = req.body;
-  
-  // Check if employee exists
-  const employeeExists = await Employee.findById(employee);
-  if (!employeeExists) {
-    return next(new AppError('Employee not found', 404));
-  }
-  
-  // Create new review with reviewer set to current user
+  // Create review
   const newReview = new Review({
-    ...req.body,
-    reviewer: req.user._id,
-    status: 'Draft'
+    employee: employeeId,
+    reviewer: req.user.id,
+    reviewType,
+    reviewPeriod: {
+      start: startDate,
+      end: endDate
+    },
+    status: 'Draft',
+    template,
+    features: {
+      includesGoals: includesGoals || false,
+      includesKPIs: includesKPIs || false,
+      includesSelfReview: includesSelfReview || false
+    },
+    isOngoing: reviewType === 'Monthly' || reviewType === 'Quarterly'
   });
   
-  const review = await newReview.save();
+  // If using a template, copy sections from template
+  if (template) {
+    const ReviewTemplate = require('../models/ReviewTemplate');
+    const templateData = await ReviewTemplate.findById(template);
+    
+    if (templateData) {
+      newReview.sections = templateData.sections.map(section => ({
+        title: section.title,
+        description: section.description,
+        weight: section.weight,
+        questions: section.questions.map(q => ({
+          text: q.text,
+          type: q.type,
+          required: q.required,
+          options: q.options,
+          response: null // Initial empty response
+        }))
+      }));
+      
+      // Copy feature flags from template
+      newReview.features = {
+        includesGoals: templateData.includesGoals || false,
+        includesKPIs: templateData.includesKPIs || false,
+        includesSelfReview: templateData.includesSelfReview || false,
+        includes360Review: templateData.includes360Review || false
+      };
+    }
+  }
   
-  // Add reference to the employee's reviews array
-  await Employee.findByIdAndUpdate(employee, {
-    $push: { reviews: review._id }
-  });
+  const savedReview = await newReview.save();
   
-  res.status(201).json(review);
+  // Populate references for response
+  await savedReview.populate([
+    { path: 'employee', select: 'firstName lastName email' },
+    { path: 'reviewer', select: 'firstName lastName email' },
+    { path: 'template', select: 'name frequency' }
+  ]);
+  
+  res.status(201).json(savedReview);
 }));
 
-// PUT update review
-router.put('/:id', protect, catchAsync(async (req, res, next) => {
+// Update review
+router.put('/:id', protect, catchAsync(async (req, res) => {
   const review = await Review.findById(req.params.id);
   
   if (!review) {
-    return next(new AppError('Review not found', 404));
+    throw new AppError('Review not found', 404);
   }
   
   // Check if user has permission to update this review
-  const canUpdate = 
-    req.user.role === 'admin' || 
-    req.user.role === 'superadmin' ||
-    req.user._id.toString() === review.reviewer._id.toString();
-    
-  if (!canUpdate) {
-    return next(new AppError('You do not have permission to update this review', 403));
+  if (!req.user.isAdmin && req.user.id !== review.reviewer.toString()) {
+    throw new AppError('Not authorized to update this review', 403);
   }
   
-  // Update the review
-  const updatedReview = await Review.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true, runValidators: true }
-  ).populate('employee', 'firstName lastName')
-   .populate('reviewer', 'firstName lastName');
+  // Only allow updates if review is not completed or acknowledged
+  if (review.status === 'Completed' || review.status === 'Acknowledged') {
+    throw new AppError('Cannot update a completed or acknowledged review', 400);
+  }
+  
+  // Update allowed fields
+  if (req.body.sections) review.sections = req.body.sections;
+  if (req.body.ratings) review.ratings = req.body.ratings;
+  if (req.body.feedback) review.feedback = req.body.feedback;
+  if (req.body.status && req.body.status !== 'Completed' && req.body.status !== 'Acknowledged') {
+    review.status = req.body.status;
+  }
+  
+  const updatedReview = await review.save();
+  
+  // Populate references for response
+  await updatedReview.populate([
+    { path: 'employee', select: 'firstName lastName email' },
+    { path: 'reviewer', select: 'firstName lastName email' },
+    { path: 'template', select: 'name frequency' }
+  ]);
   
   res.status(200).json(updatedReview);
 }));
 
-// PATCH acknowledge review (employee only)
-router.patch('/:id/acknowledge', protect, catchAsync(async (req, res, next) => {
+// Submit review
+router.put('/:id/submit', protect, catchAsync(async (req, res) => {
   const review = await Review.findById(req.params.id);
   
   if (!review) {
-    return next(new AppError('Review not found', 404));
+    throw new AppError('Review not found', 404);
   }
   
-  // Check if user is the employee being reviewed
-  if (req.user._id.toString() !== review.employee.toString()) {
-    return next(new AppError('You can only acknowledge your own reviews', 403));
+  // Check if user has permission to submit this review
+  if (!req.user.isAdmin && req.user.id !== review.reviewer.toString()) {
+    throw new AppError('Not authorized to submit this review', 403);
+  }
+  
+  // Update status and submission date
+  review.status = 'Submitted';
+  review.submissionDate = new Date();
+  
+  const submittedReview = await review.save();
+  
+  // Populate references for response
+  await submittedReview.populate([
+    { path: 'employee', select: 'firstName lastName email' },
+    { path: 'reviewer', select: 'firstName lastName email' },
+    { path: 'template', select: 'name frequency' }
+  ]);
+  
+  // TODO: Send notification to employee
+  
+  res.status(200).json(submittedReview);
+}));
+
+// Complete review (finalize)
+router.put('/:id/complete', protect, catchAsync(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  
+  if (!review) {
+    throw new AppError('Review not found', 404);
+  }
+  
+  // Check if user has permission to complete this review
+  if (!req.user.isAdmin && req.user.id !== review.reviewer.toString()) {
+    throw new AppError('Not authorized to complete this review', 403);
+  }
+  
+  // Update status
+  review.status = 'Completed';
+  
+  const completedReview = await review.save();
+  
+  // Populate references for response
+  await completedReview.populate([
+    { path: 'employee', select: 'firstName lastName email' },
+    { path: 'reviewer', select: 'firstName lastName email' },
+    { path: 'template', select: 'name frequency' }
+  ]);
+  
+  // TODO: Send notification to employee
+  
+  res.status(200).json(completedReview);
+}));
+
+// Acknowledge review (by employee)
+router.put('/:id/acknowledge', protect, catchAsync(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  
+  if (!review) {
+    throw new AppError('Review not found', 404);
+  }
+  
+  // Check if user is the employee
+  if (req.user.id !== review.employee.toString()) {
+    throw new AppError('Only the employee can acknowledge this review', 403);
   }
   
   // Update acknowledgement
+  review.status = 'Acknowledged';
   review.acknowledgement = {
     acknowledged: true,
     date: new Date(),
-    employeeComments: req.body.employeeComments || ''
+    employeeComments: req.body.comments || ''
   };
   
-  review.status = 'Acknowledged';
+  const acknowledgedReview = await review.save();
   
-  await review.save();
+  // Populate references for response
+  await acknowledgedReview.populate([
+    { path: 'employee', select: 'firstName lastName email' },
+    { path: 'reviewer', select: 'firstName lastName email' },
+    { path: 'template', select: 'name frequency' }
+  ]);
   
-  res.status(200).json(review);
+  res.status(200).json(acknowledgedReview);
 }));
 
-// DELETE review (admin only)
-router.delete('/:id', protect, authorize('admin', 'superadmin'), catchAsync(async (req, res, next) => {
+// Record monthly check-in
+router.post('/:id/checkin', protect, catchAsync(async (req, res) => {
   const review = await Review.findById(req.params.id);
   
   if (!review) {
-    return next(new AppError('Review not found', 404));
+    throw new AppError('Review not found', 404);
   }
   
-  // Remove reference from employee
-  await Employee.findByIdAndUpdate(review.employee, {
-    $pull: { reviews: review._id }
-  });
+  // Check if user has permission to record check-in
+  if (!req.user.isAdmin && req.user.id !== review.reviewer.toString()) {
+    throw new AppError('Not authorized to record check-in for this review', 403);
+  }
   
-  await Review.findByIdAndDelete(req.params.id);
+  // Add progress snapshot
+  const { snapshot, nextCheckInDate } = req.body;
+  
+  // Set the check-in date if not provided
+  if (!snapshot.date) {
+    snapshot.date = new Date();
+  }
+  
+  // Add snapshot to review
+  if (!review.progressSnapshots) {
+    review.progressSnapshots = [];
+  }
+  
+  review.progressSnapshots.push(snapshot);
+  
+  // Set next check-in date if provided
+  if (nextCheckInDate) {
+    review.nextCheckInDate = nextCheckInDate;
+  }
+  
+  // Make sure review is marked as in progress
+  if (review.status === 'Draft') {
+    review.status = 'InProgress';
+  }
+  
+  // Update review
+  const updatedReview = await review.save();
+  
+  // Update associated goals if present in snapshot
+  if (snapshot.goals && snapshot.goals.length > 0) {
+    for (const goalUpdate of snapshot.goals) {
+      if (goalUpdate.goalId) {
+        await Goal.findByIdAndUpdate(
+          goalUpdate.goalId,
+          { 
+            progress: goalUpdate.progress,
+            status: goalUpdate.status,
+            notes: goalUpdate.notes,
+            updatedBy: req.user.id
+          },
+          { new: true }
+        );
+      }
+    }
+  }
+  
+  // Populate references for response
+  await updatedReview.populate([
+    { path: 'employee', select: 'firstName lastName email' },
+    { path: 'reviewer', select: 'firstName lastName email' },
+    { path: 'template', select: 'name frequency' }
+  ]);
+  
+  res.status(200).json({ 
+    message: 'Check-in recorded successfully',
+    review: updatedReview
+  });
+}));
+
+// Delete review
+router.delete('/:id', protect, authorize('admin'), catchAsync(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  
+  if (!review) {
+    throw new AppError('Review not found', 404);
+  }
+  
+  await review.deleteOne();
   
   res.status(204).send();
+}));
+
+// Get review statistics
+router.get('/stats', protect, authorize('manager', 'admin'), catchAsync(async (req, res) => {
+  // Basic stats
+  const totalReviews = await Review.countDocuments();
+  const completedReviews = await Review.countDocuments({ status: 'Completed' });
+  const inProgressReviews = await Review.countDocuments({ status: 'InProgress' });
+  const pendingReviews = await Review.countDocuments({ status: 'Draft' });
+  
+  // Reviews by type
+  const reviewsByType = await Review.aggregate([
+    { $group: { _id: '$reviewType', count: { $sum: 1 } } }
+  ]);
+  
+  // Average ratings
+  const averageRatings = await Review.aggregate([
+    { $match: { 'ratings.overallRating': { $exists: true } } },
+    { 
+      $group: { 
+        _id: null,
+        avgOverall: { $avg: '$ratings.overallRating' },
+        avgPerformance: { $avg: '$ratings.performanceRating' },
+        avgCommunication: { $avg: '$ratings.communicationRating' },
+        avgTeamwork: { $avg: '$ratings.teamworkRating' },
+        avgLeadership: { $avg: '$ratings.leadershipRating' },
+        avgTechnical: { $avg: '$ratings.technicalSkillsRating' }
+      } 
+    }
+  ]);
+  
+  res.status(200).json({
+    totalReviews,
+    completedReviews,
+    inProgressReviews,
+    pendingReviews,
+    reviewsByType,
+    averageRatings: averageRatings.length > 0 ? averageRatings[0] : null
+  });
 }));
 
 module.exports = router;

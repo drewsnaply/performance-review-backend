@@ -25,11 +25,14 @@ const departmentsRoutes = require('./routes/departments');
 const employeesRoutes = require('./routes/employees');
 const performanceRoutes = require('./routes/performance');
 
-// Import the new route files
+// Import the route files
 const reviewRoutes = require('./routes/reviews');
 const compensationRoutes = require('./routes/compensation');
 const positionRoutes = require('./routes/positions');
 const reviewTemplatesRoutes = require('./routes/reviewTemplates');
+// New route imports - will be used once you create these files
+const kpisRoutes = require('./routes/kpis.js');
+const goalsRoutes = require('./routes/goals.js');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -83,11 +86,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentsRoutes);
 app.use('/api/employees', employeesRoutes);
 
-// Use the new routes
+// Use all routes
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/compensation', compensationRoutes);
 app.use('/api/positions', positionRoutes);
 app.use('/api/templates', reviewTemplatesRoutes); 
+// New route registrations - will be used once you create these files
+app.use('/api/kpis', kpisRoutes);
+app.use('/api/goals', goalsRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({
