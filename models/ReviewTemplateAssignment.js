@@ -19,7 +19,7 @@ const ReviewTemplateAssignmentSchema = new Schema({
   },
   reviewer: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee',
+    ref: 'User',  // Changed from 'Employee' to 'User' for auth compatibility
     required: true
   },
   status: {
@@ -38,11 +38,11 @@ const ReviewTemplateAssignmentSchema = new Schema({
   reviewPeriod: {
     start: {
       type: Date,
-      required: true
+      required: false  // Made optional
     },
     end: {
       type: Date,
-      required: true
+      required: false  // Made optional
     }
   },
   completionDate: {
@@ -55,6 +55,11 @@ const ReviewTemplateAssignmentSchema = new Schema({
   notes: {
     type: String,
     trim: true
+  },
+  // Added for compatibility with routes
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, {
   timestamps: true
