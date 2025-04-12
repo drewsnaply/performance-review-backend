@@ -1,99 +1,110 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+// Question schema
+const QuestionSchema = new Schema({
+  text: {
+    type: String,
+    required: true
+  },
+  type: {
+    type: String,
+    enum: ['text', 'rating', 'yesno', 'multiple-choice'],
+    default: 'text'
+  },
+  required: {
+    type: Boolean,
+    default: true
+  },
+  options: {
+    type: [String],
+    default: []
+  }
+});
+
+// Section schema
+const SectionSchema = new Schema({
+  title: {
+    type: String,
+    required: true
+  },
+  description: {
+    type: String
+  },
+  weight: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
+  questions: [QuestionSchema]
+});
+
+// Review Template schema
 const ReviewTemplateSchema = new Schema({
   name: {
     type: String,
-    required: true,
-    trim: true
+    required: true
   },
   description: {
-    type: String,
-    trim: true
+    type: String
   },
   frequency: {
     type: String,
-    enum: ['Annually', 'Semi-Annually', 'Quarterly', 'Monthly', 'Custom'],
-    default: 'Annually'
-  },
-  workflow: {
-    steps: [{
-      role: {
-        type: String,
-        enum: ['Employee', 'Manager', 'Department Head', 'HR'],
-        required: true
-      },
-      order: {
-        type: Number,
-        required: true
-      }
-    }]
+    enum: ['Annual', 'Semi-Annual', 'Quarterly', 'Monthly'],
+    default: 'Annual'
   },
   status: {
     type: String,
-    enum: ['Active', 'Inactive', 'Draft'],
+    enum: ['Active', 'Inactive'],
     default: 'Active'
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',  // Changed from 'Employee' to 'User'
-    required: true
+  sections: [SectionSchema],
+  
+  // Enhanced features
+  includesSelfReview: {
+    type: Boolean,
+    default: false
   },
-  sections: [{
-    title: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    description: {
-      type: String,
-      trim: true
-    },
-    order: {
-      type: Number,
-      required: true
-    },
-    questions: [{
-      text: {
-        type: String,
-        required: true,
-        trim: true
-      },
-      type: {
-        type: String,
-        enum: ['Rating', 'Text', 'MultipleChoice', 'Checkbox'],
-        default: 'Rating'
-      },
-      required: {
-        type: Boolean,
-        default: true
-      },
-      options: [String], // For multiple choice or checkbox questions
-      ratingScale: {
-        min: {
-          type: Number,
-          default: 1
-        },
-        max: {
-          type: Number,
-          default: 5
-        }
-      }
-    }]
-  }],
-  defaultGoals: [{
-    description: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    category: {
-      type: String,
-      trim: true
-    }
-  }]
+  includes360Review: {
+    type: Boolean,
+    default: false
+  },
+  includesManagerReview: {
+    type: Boolean,
+    default: true
+  },
+  includesGoals: {
+    type: Boolean,
+    default: false
+  },
+  includesKPIs: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Legacy field - kept for backward compatibility
+  active: {
+    type: Boolean,
+    default: true
+  },
+  
+  createdBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  }
 }, {
-  timestamps: true
+  timestamps: true  // This adds createdAt and updatedAt automatically
 });
 
-module.exports = mongoose.model('ReviewTemplate', ReviewTemplateSchema);
+// Pre-save middleware to update timestamps
+ReviewTemplateSchema.pre('save', function(next) {
+  // Ensure active field matches status for backward compatibility
+  this.active = (this.status === 'Active');
+  next();
+});
+
+// Create model from schema
+const ReviewTemplate = mongoose.model('ReviewTemplate', ReviewTemplateSchema);
+
+module.exports = ReviewTemplate;
