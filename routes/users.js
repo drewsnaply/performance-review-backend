@@ -3,6 +3,8 @@ const router = express.Router();
 const User = require('../models/User');
 const { catchAsync, AppError } = require('../errorHandler');
 const { protect, authorize } = require('./auth');
+const crypto = require('crypto-random-string');
+const { sendWelcomeEmail } = require('../utils/emailService');
 
 // GET all users (for Super Admin)
 router.get('/', protect, authorize('superadmin'), catchAsync(async (req, res, next) => {
@@ -24,10 +26,10 @@ router.get('/', protect, authorize('superadmin'), catchAsync(async (req, res, ne
 router.post('/', protect, authorize('superadmin'), catchAsync(async (req, res, next) => {
   console.log('POST /api/users route hit - Creating new user');
   
-  const { username, email, password, firstName, lastName, role } = req.body;
+  const { username, email, firstName, lastName, role } = req.body;
   
   // Validate required fields
-  if (!username || !email || !password || !role) {
+  if (!username || !email || !role) {
     return next(new AppError('Missing required fields', 400));
   }
   
@@ -41,11 +43,14 @@ router.post('/', protect, authorize('superadmin'), catchAsync(async (req, res, n
       return next(new AppError('A user with this email or username already exists', 400));
     }
     
+    // Generate a temporary random password
+    const tempPassword = crypto({ length: 12, type: 'url-safe' });
+    
     // Create new user
     const newUser = new User({
       username,
       email,
-      password, // Password will be hashed via pre-save hook in your User model
+      password: tempPassword, // Will be hashed by the User model
       firstName: firstName || '',
       lastName: lastName || '',
       role,
@@ -53,11 +58,21 @@ router.post('/', protect, authorize('superadmin'), catchAsync(async (req, res, n
       requirePasswordChange: true
     });
     
+    // Generate reset token for password setup
+    const resetToken = crypto({ length: 32, type: 'url-safe' });
+    newUser.resetPasswordToken = resetToken;
+    newUser.resetPasswordExpires = Date.now() + 86400000; // 24 hours
+    
     await newUser.save();
+    
+    // Send welcome email with password setup link
+    await sendWelcomeEmail(newUser, resetToken);
     
     // Return user without password
     const userWithoutPassword = newUser.toObject();
     delete userWithoutPassword.password;
+    delete userWithoutPassword.resetPasswordToken;
+    delete userWithoutPassword.resetPasswordExpires;
     
     res.status(201).json(userWithoutPassword);
   } catch (error) {

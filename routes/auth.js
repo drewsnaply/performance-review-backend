@@ -99,6 +99,40 @@ router.post('/login', catchAsync(async (req, res, next) => {
   res.status(200).json({ token, user: userResponse });
 }));
 
+// Password setup route for new users
+router.post('/setup-password', catchAsync(async (req, res, next) => {
+  const { token, password } = req.body;
+  
+  if (!token || !password) {
+    return next(new AppError('Missing required fields', 400));
+  }
+  
+  try {
+    // Find user with valid token that hasn't expired
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    }).select('+resetPasswordToken +resetPasswordExpires');
+    
+    if (!user) {
+      return next(new AppError('Invalid or expired token', 400));
+    }
+    
+    // Update user password and clear token
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.requirePasswordChange = false;
+    
+    await user.save();
+    
+    res.status(200).json({ message: 'Password setup successful' });
+  } catch (error) {
+    console.error('Error setting up password:', error);
+    next(new AppError('Error setting up password', 500));
+  }
+}));
+
 // Middleware to protect routes
 const protect = catchAsync(async (req, res, next) => {
   let token;

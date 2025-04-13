@@ -63,6 +63,15 @@ const UserSchema = new Schema({
   requirePasswordChange: {
     type: Boolean,
     default: true
+  },
+  // Added fields for password reset functionality
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpires: {
+    type: Date,
+    select: false
   }
 }, {
   timestamps: true,
