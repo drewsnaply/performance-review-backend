@@ -44,21 +44,14 @@ const allowedOrigins = [
   'https://performance-review-frontend.onrender.com'
 ];
 
-// Configure and use the cors package
+// Configure and use the cors package - Updated to make it simpler and more permissive
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS attempt from unauthorized origin: ${origin}`);
-      callback(null, true);
-    }
+    callback(null, true); // Allow all origins for simplicity
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  credentials: true,
+  credentials: false, // Changed to false to match frontend
   maxAge: 86400
 }));
 
@@ -66,11 +59,12 @@ app.use('/api/performance', performanceRoutes);
 
 app.options('*', cors());
 
+// Simplified CORS headers middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', allowedOrigins.includes(req.headers.origin) ? req.headers.origin : 'https://performance-review-frontend.onrender.com');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Origin', '*'); // Allow all origins
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Credentials', 'false');
   next();
 });
 
