@@ -35,6 +35,7 @@ const kpisRoutes = require('./routes/kpis.js');
 const goalsRoutes = require('./routes/goals.js');
 // Add customers routes for Super Admin
 const customersRoutes = require('./routes/customers');
+const usersRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -90,6 +91,7 @@ app.use('/api/templates', reviewTemplatesRoutes);
 // New route registrations - will be used once you create these files
 app.use('/api/kpis', kpisRoutes);
 app.use('/api/goals', goalsRoutes);
+app.use('/api/users', usersRoutes);
 // Register customers routes for Super Admin
 app.use('/api/customers', customersRoutes);
 
