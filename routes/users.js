@@ -3,7 +3,6 @@ const router = express.Router();
 const User = require('../models/User');
 const { catchAsync, AppError } = require('../errorHandler');
 const { protect, authorize } = require('./auth');
-const crypto = require('crypto-random-string');
 const { sendWelcomeEmail } = require('../utils/emailService');
 
 // GET all users (for Super Admin)
@@ -43,8 +42,21 @@ router.post('/', protect, authorize('superadmin'), catchAsync(async (req, res, n
       return next(new AppError('A user with this email or username already exists', 400));
     }
     
-    // Generate a temporary random password
-    const tempPassword = crypto({ length: 12, type: 'url-safe' });
+    // Generate a temporary random password and reset token
+    let tempPassword = 'TemporaryPassword123!';
+    let resetToken = Math.random().toString(36).substring(2, 15) + 
+                    Math.random().toString(36).substring(2, 15);
+    
+    try {
+      // Try to use crypto-random-string if available
+      const crypto = require('crypto-random-string');
+      tempPassword = crypto({ length: 12, type: 'url-safe' });
+      resetToken = crypto({ length: 32, type: 'url-safe' });
+      console.log('Generated tokens using crypto-random-string');
+    } catch (cryptoError) {
+      console.error('Error with crypto-random-string, using fallback:', cryptoError);
+      // We've already set fallback values above
+    }
     
     // Create new user
     const newUser = new User({
@@ -55,24 +67,35 @@ router.post('/', protect, authorize('superadmin'), catchAsync(async (req, res, n
       lastName: lastName || '',
       role,
       isActive: true,
-      requirePasswordChange: true
+      requirePasswordChange: true,
+      resetPasswordToken: resetToken,
+      resetPasswordExpires: Date.now() + 86400000 // 24 hours
     });
     
-    // Generate reset token for password setup
-    const resetToken = crypto({ length: 32, type: 'url-safe' });
-    newUser.resetPasswordToken = resetToken;
-    newUser.resetPasswordExpires = Date.now() + 86400000; // 24 hours
-    
+    // Save the user first
     await newUser.save();
+    console.log(`User ${username} created successfully`);
     
-    // Send welcome email with password setup link
-    await sendWelcomeEmail(newUser, resetToken);
+    // Then try to send email, but don't fail if email sending fails
+    let emailSent = false;
+    try {
+      console.log('Attempting to send welcome email...');
+      await sendWelcomeEmail(newUser, resetToken);
+      emailSent = true;
+      console.log(`Welcome email sent to ${email}`);
+    } catch (emailError) {
+      console.error('Error sending welcome email:', emailError);
+      // We continue the process even if email fails
+    }
     
     // Return user without password
     const userWithoutPassword = newUser.toObject();
     delete userWithoutPassword.password;
     delete userWithoutPassword.resetPasswordToken;
     delete userWithoutPassword.resetPasswordExpires;
+    
+    // Add flag to indicate if email was sent
+    userWithoutPassword.emailSent = emailSent;
     
     res.status(201).json(userWithoutPassword);
   } catch (error) {
