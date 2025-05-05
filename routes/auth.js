@@ -99,6 +99,33 @@ router.post('/login', catchAsync(async (req, res, next) => {
   res.status(200).json({ token, user: userResponse });
 }));
 
+// NEW: Verify token validity (for password setup page)
+router.get('/verify-token/:token', catchAsync(async (req, res, next) => {
+  const { token } = req.params;
+  
+  if (!token) {
+    return next(new AppError('Token is required', 400));
+  }
+  
+  try {
+    // Find user with this token that hasn't expired
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+    
+    if (!user) {
+      return next(new AppError('Invalid or expired token', 400));
+    }
+    
+    // Token is valid
+    res.status(200).json({ valid: true });
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    next(new AppError('Error verifying token', 500));
+  }
+}));
+
 // Password setup route for new users
 router.post('/setup-password', catchAsync(async (req, res, next) => {
   const { token, password } = req.body;
